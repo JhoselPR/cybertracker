@@ -1,26 +1,7 @@
 import type { EnrichedTrackingFrame } from '../../types/gestures'
+import type { InteractionFrame } from '../../types/interaction'
+import { projectSourceToViewport } from '../coordinates'
 import { HAND_CONNECTIONS } from '../vision/handTopology'
-
-interface CoverTransform {
-  scale: number
-  offsetX: number
-  offsetY: number
-}
-
-function getCoverTransform(
-  sourceWidth: number,
-  sourceHeight: number,
-  displayWidth: number,
-  displayHeight: number,
-): CoverTransform {
-  const scale = Math.max(displayWidth / sourceWidth, displayHeight / sourceHeight)
-
-  return {
-    scale,
-    offsetX: (displayWidth - sourceWidth * scale) / 2,
-    offsetY: (displayHeight - sourceHeight * scale) / 2,
-  }
-}
 
 export function syncCanvasSize(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
   const width = canvas.clientWidth
@@ -43,6 +24,7 @@ export function drawTrackingFrame(
   canvas: HTMLCanvasElement,
   video: HTMLVideoElement,
   frame: EnrichedTrackingFrame,
+  interaction: InteractionFrame,
 ): void {
   const context = syncCanvasSize(canvas)
   const width = canvas.clientWidth
@@ -52,12 +34,12 @@ export function drawTrackingFrame(
   context.clearRect(0, 0, width, height)
   if (!video.videoWidth || !video.videoHeight) return
 
-  const transform = getCoverTransform(video.videoWidth, video.videoHeight, width, height)
-  const toPoint = (x: number, y: number) => ({
-    // The video is mirrored with CSS. Mirror raw MediaPipe X once, here at render time.
-    x: (1 - x) * video.videoWidth * transform.scale + transform.offsetX,
-    y: y * video.videoHeight * transform.scale + transform.offsetY,
-  })
+  const toPoint = (x: number, y: number) => {
+    const projected = projectSourceToViewport(
+      { x, y }, video.videoWidth, video.videoHeight, width, height, true,
+    )
+    return { x: projected.x * width, y: projected.y * height }
+  }
 
   context.lineCap = 'round'
   context.lineJoin = 'round'
@@ -101,6 +83,30 @@ export function drawTrackingFrame(
       context.fillStyle = '#d8fdff'
       context.fillText(label, x, y)
     }
+  }
+
+  if (interaction.pointer) {
+    const { x, y } = interaction.pointer.position
+    const pointerX = x * width
+    const pointerY = y * height
+    const color = interaction.pointer.stale
+      ? 'rgba(216, 253, 255, 0.45)'
+      : interaction.state === 'dragging'
+        ? '#ffcf5a'
+        : interaction.state === 'pinching'
+          ? '#ff7ad9'
+          : '#4bf7ff'
+    context.beginPath()
+    context.arc(pointerX, pointerY, interaction.state === 'dragging' ? 7 : 5, 0, Math.PI * 2)
+    context.strokeStyle = color
+    context.lineWidth = 2
+    context.stroke()
+
+    const stateLabel = interaction.pointer.stale ? 'STALE' : interaction.state.toUpperCase()
+    context.font = '600 10px ui-monospace, SFMono-Regular, Menlo, monospace'
+    context.textBaseline = 'top'
+    context.fillStyle = color
+    context.fillText(stateLabel, Math.min(width - 58, pointerX + 10), Math.min(height - 16, pointerY + 8))
   }
 }
 

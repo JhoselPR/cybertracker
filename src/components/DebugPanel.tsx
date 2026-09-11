@@ -14,6 +14,11 @@ interface DebugPanelProps {
 }
 
 export function DebugPanel({ snapshot }: DebugPanelProps) {
+  const interaction = snapshot.interaction
+  const pointer = interaction?.pointer
+  const drag = interaction?.drag
+  const lastEvent = interaction?.events.at(-1)
+
   return (
     <aside className="debug-panel" aria-label="Hand tracking diagnostics">
       <div className="debug-summary">
@@ -40,6 +45,21 @@ export function DebugPanel({ snapshot }: DebugPanelProps) {
           </div>
         </div>
       ))}
+
+      <div className="debug-interaction">
+        <div className="debug-section-heading">INTERACTION</div>
+        <div className="debug-interaction-grid">
+          <span>PRIMARY</span>
+          <span>{interaction?.primaryHand
+            ? `H${interaction.primaryHand.trackId} ${interaction.primaryHand.handedness.toUpperCase()}`
+            : '—'}</span>
+          <span>STATE</span><span>{interaction?.state.toUpperCase() ?? 'IDLE'}</span>
+          <span>POINTER</span><span>{pointer ? `${pointer.position.x.toFixed(3)} ${pointer.position.y.toFixed(3)}` : '—'}</span>
+          <span>VELOCITY</span><span>{pointer ? `${pointer.velocity.x.toFixed(2)} ${pointer.velocity.y.toFixed(2)} | ${pointer.velocity.magnitude.toFixed(2)}` : '—'}</span>
+          <span>DRAG</span><span>{drag ? `${drag.totalDelta.x.toFixed(3)} ${drag.totalDelta.y.toFixed(3)} | ${drag.distance.toFixed(3)} | ${Math.round(drag.durationMs)}ms` : '—'}</span>
+          <span>EVENT</span><span>{lastEvent?.type.toUpperCase() ?? '—'}</span>
+        </div>
+      </div>
     </aside>
   )
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type RefObject } from 'react'
 import { GestureEngine } from '../lib/gestures'
+import { InteractionEngine } from '../lib/interaction'
 import { clearTrackingCanvas, drawTrackingFrame } from '../lib/rendering/drawHands'
 import { createHandTracker, type HandTracker } from '../lib/vision/handTracker'
 import type { TrackerStatus, TrackingDebugSnapshot } from '../types/tracking'
@@ -8,7 +9,7 @@ import { getErrorMessage, isCameraPermissionError } from '../utils/errors'
 const DEBUG_UPDATE_INTERVAL_MS = 250
 const FPS_SAMPLE_INTERVAL_MS = 500
 
-const EMPTY_DEBUG: TrackingDebugSnapshot = { fps: 0, hands: [] }
+const EMPTY_DEBUG: TrackingDebugSnapshot = { fps: 0, hands: [], interaction: null }
 
 export function useHandTracking(
   videoRef: RefObject<HTMLVideoElement | null>,
@@ -32,6 +33,7 @@ export function useHandTracking(
     let stream: MediaStream | null = null
     let tracker: HandTracker | null = null
     const gestureEngine = new GestureEngine()
+    const interactionEngine = new InteractionEngine()
     let animationFrame = 0
     let stopped = false
     let previousVideoTime = -1
@@ -57,6 +59,7 @@ export function useHandTracking(
       stream = null
       tracker = null
       gestureEngine.dispose()
+      interactionEngine.dispose()
 
       if (video.srcObject === activeStream) video.srcObject = null
       activeStream?.getTracks().forEach((track) => {
@@ -120,7 +123,14 @@ export function useHandTracking(
               const enrichedFrame = gestureEngine.processFrame(frame, {
                 aspectRatio: video.videoWidth / video.videoHeight,
               })
-              drawTrackingFrame(canvas, video, enrichedFrame)
+              const interactionFrame = interactionEngine.processFrame(enrichedFrame, {
+                sourceWidth: video.videoWidth,
+                sourceHeight: video.videoHeight,
+                viewportWidth: canvas.clientWidth,
+                viewportHeight: canvas.clientHeight,
+                mirrorX: true,
+              })
+              drawTrackingFrame(canvas, video, enrichedFrame, interactionFrame)
               inferenceCount += 1
 
               const fpsElapsed = now - fpsWindowStart
@@ -131,7 +141,8 @@ export function useHandTracking(
               }
 
               if (now - lastDebugUpdate >= DEBUG_UPDATE_INTERVAL_MS) {
-                setDebug({ fps, hands: enrichedFrame.hands })
+                // This low-frequency snapshot is diagnostics, not the authoritative event channel.
+                setDebug({ fps, hands: enrichedFrame.hands, interaction: interactionFrame })
                 lastDebugUpdate = now
               }
             }
