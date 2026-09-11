@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+:root {
+  color: #d8fdff;
+  background: #000;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+button {
+  font: inherit;
+}
+
+button:focus-visible {
+  outline: 2px solid #4bf7ff;
+  outline-offset: 3px;
+}
+
+::selection {
+  color: #000;
+  background: #4bf7ff;
+}
+
+.tracker-shell {
+  position: fixed;
+  inset: 0;
+  isolation: isolate;
+  min-width: 280px;
+  background: #000;
+}
+
+.camera-feed,
+.tracking-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.camera-feed {
+  z-index: 0;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.tracking-layer {
+  z-index: 1;
+  pointer-events: none;
+}
+
+.debug-panel {
+  position: absolute;
+  z-index: 2;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  width: min(264px, calc(100vw - 24px));
+  border: 1px solid rgba(75, 247, 255, 0.4);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #d8fdff;
+  background: rgba(0, 8, 10, 0.78);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-size: 11px;
+  line-height: 1.45;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.debug-summary,
+.debug-hand {
+  display: grid;
+  align-items: center;
+}
+
+.debug-summary {
+  grid-template-columns: 1fr auto;
+  color: #4bf7ff;
+}
+
+.debug-hand {
+  grid-template-columns: minmax(0, 1.7fr) repeat(3, 1fr);
+  gap: 5px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(216, 253, 255, 0.16);
+}
+
+.debug-hand-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-overlay {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  width: min(360px, calc(100vw - 40px));
+  transform: translate(-50%, -50%);
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: #d8fdff;
+  text-align: center;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.status-overlay p {
+  margin: 0;
+}
+
+.status-mark {
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(75, 247, 255, 0.35);
+  border-top-color: #4bf7ff;
+  border-radius: 50%;
+  animation: scan 900ms linear infinite;
+}
+
+.status-overlay button {
+  min-height: 44px;
+  border: 1px solid #4bf7ff;
+  border-radius: 999px;
+  padding: 0 20px;
+  color: #d8fdff;
+  background: #06262a;
+  cursor: pointer;
+}
+
+.status-overlay button:hover {
+  background: #09373c;
+}
+
+.status-overlay button:active {
+  transform: translateY(1px);
+}
+
+@keyframes scan {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-mark {
+    animation: none;
+    border-color: #4bf7ff;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  .debug-panel {
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    padding: 8px 10px;
+  }
+}
