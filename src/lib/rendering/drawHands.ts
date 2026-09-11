@@ -1,4 +1,4 @@
-import type { TrackingFrame } from '../../types/tracking'
+import type { EnrichedTrackingFrame } from '../../types/gestures'
 import { HAND_CONNECTIONS } from '../vision/handTopology'
 
 interface CoverTransform {
@@ -42,7 +42,7 @@ export function syncCanvasSize(canvas: HTMLCanvasElement): CanvasRenderingContex
 export function drawTrackingFrame(
   canvas: HTMLCanvasElement,
   video: HTMLVideoElement,
-  frame: TrackingFrame,
+  frame: EnrichedTrackingFrame,
 ): void {
   const context = syncCanvasSize(canvas)
   const width = canvas.clientWidth
@@ -86,6 +86,20 @@ export function drawTrackingFrame(
       context.strokeStyle = '#00dce8'
       context.lineWidth = 0.75
       context.stroke()
+    }
+
+    if (hand.stableGesture.gesture !== 'unknown') {
+      const labelPoint = toPoint(hand.stableGesture.position.x, hand.stableGesture.position.y)
+      const label = hand.stableGesture.gesture.replace('_', ' ').toUpperCase()
+      context.font = '600 11px ui-monospace, SFMono-Regular, Menlo, monospace'
+      context.textBaseline = 'bottom'
+      const labelWidth = context.measureText(label).width
+      const x = Math.max(6, Math.min(width - labelWidth - 14, labelPoint.x + 10))
+      const y = Math.max(20, Math.min(height - 6, labelPoint.y - 10))
+      context.fillStyle = 'rgba(0, 8, 10, 0.78)'
+      context.fillRect(x - 5, y - 14, labelWidth + 10, 18)
+      context.fillStyle = '#d8fdff'
+      context.fillText(label, x, y)
     }
   }
 }

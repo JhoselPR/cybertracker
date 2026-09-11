@@ -20,7 +20,7 @@ export interface TrackingFrame {
 
 export interface TrackingDebugSnapshot {
   fps: number
-  hands: TrackedHand[]
+  hands: import('./gestures').EnrichedHand[]
 }
 
 export type TrackerStatus =

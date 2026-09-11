@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type RefObject } from 'react'
+import { GestureEngine } from '../lib/gestures'
 import { clearTrackingCanvas, drawTrackingFrame } from '../lib/rendering/drawHands'
 import { createHandTracker, type HandTracker } from '../lib/vision/handTracker'
 import type { TrackerStatus, TrackingDebugSnapshot } from '../types/tracking'
@@ -30,6 +31,7 @@ export function useHandTracking(
     let cancelled = false
     let stream: MediaStream | null = null
     let tracker: HandTracker | null = null
+    const gestureEngine = new GestureEngine()
     let animationFrame = 0
     let stopped = false
     let previousVideoTime = -1
@@ -54,6 +56,7 @@ export function useHandTracking(
       const activeTracker = tracker
       stream = null
       tracker = null
+      gestureEngine.dispose()
 
       if (video.srcObject === activeStream) video.srcObject = null
       activeStream?.getTracks().forEach((track) => {
@@ -114,7 +117,10 @@ export function useHandTracking(
             if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.currentTime !== previousVideoTime) {
               previousVideoTime = video.currentTime
               const frame = tracker!.detect(video, now)
-              drawTrackingFrame(canvas, video, frame)
+              const enrichedFrame = gestureEngine.processFrame(frame, {
+                aspectRatio: video.videoWidth / video.videoHeight,
+              })
+              drawTrackingFrame(canvas, video, enrichedFrame)
               inferenceCount += 1
 
               const fpsElapsed = now - fpsWindowStart
@@ -125,7 +131,7 @@ export function useHandTracking(
               }
 
               if (now - lastDebugUpdate >= DEBUG_UPDATE_INTERVAL_MS) {
-                setDebug({ fps, hands: frame.hands })
+                setDebug({ fps, hands: enrichedFrame.hands })
                 lastDebugUpdate = now
               }
             }

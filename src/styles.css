@@ -68,7 +68,7 @@ button:focus-visible {
   z-index: 2;
   top: max(12px, env(safe-area-inset-top));
   left: max(12px, env(safe-area-inset-left));
-  width: min(264px, calc(100vw - 24px));
+  width: min(320px, calc(100vw - 24px));
   border: 1px solid rgba(75, 247, 255, 0.4);
   border-radius: 12px;
   padding: 10px 12px;
@@ -82,7 +82,9 @@ button:focus-visible {
 }
 
 .debug-summary,
-.debug-hand {
+.debug-hand-heading,
+.debug-gestures,
+.debug-fingers {
   display: grid;
   align-items: center;
 }
@@ -93,11 +95,27 @@ button:focus-visible {
 }
 
 .debug-hand {
-  grid-template-columns: minmax(0, 1.7fr) repeat(3, 1fr);
-  gap: 5px;
   margin-top: 7px;
   padding-top: 7px;
   border-top: 1px solid rgba(216, 253, 255, 0.16);
+}
+
+.debug-hand-heading,
+.debug-gestures {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.debug-gestures {
+  margin-top: 3px;
+  color: #b5eef1;
+}
+
+.debug-fingers {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-top: 4px;
+  color: #4bf7ff;
 }
 
 .debug-hand-name {
@@ -173,5 +191,15 @@ button:focus-visible {
     top: max(8px, env(safe-area-inset-top));
     left: max(8px, env(safe-area-inset-left));
     padding: 8px 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  .debug-panel {
+    font-size: 10px;
+  }
+
+  .debug-fingers {
+    gap: 3px;
   }
 }

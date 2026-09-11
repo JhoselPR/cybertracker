@@ -16,11 +16,11 @@ People evaluating live hand tracking from a modern desktop or mobile browser.
 
 ## Product Purpose
 
-Cybertracker visualizes live hand landmarks over the front-facing camera and exposes concise tracking diagnostics.
+Cybertracker visualizes live hand landmarks and supported static gestures over the front-facing camera, with concise tracking diagnostics.
 
 ## Capabilities and Constraints
 
-The first iteration tracks up to two hands. It does not include gestures, interactions, 3D rendering, or a backend. Camera access and first-load model downloads are required.
+The second iteration tracks up to two hands and recognizes open palm, fist, point, pinch, and victory poses. It does not include dynamic gestures, interactions, 3D rendering, or a backend. Camera access and first-load model downloads are required.
 
 ## Brand Commitments
 
