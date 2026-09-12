@@ -14,10 +14,10 @@ function harness() {
   const bridge = new InteractionBridge(initial)
   const kernel = new InteractionKernel(initial, (next) => bridge.setSnapshot(next), () => viewport)
   bridge.subscribeFrames((frame) => kernel.consumeFrame(frame))
-  const publish = (source: 'hand' | 'pointer', position: UiPoint, events: UiInputEvent[] = []) => bridge.publishInputFrame({
+  const publish = (source: 'hand' | 'pointer', position: UiPoint, events: UiInputEvent[] = [], timestampMs = 1) => bridge.publishInputFrame({
     source,
-    timestampMs: 1,
-    pointer: { position, state: 'pointing', visible: true },
+    timestampMs,
+    pointer: { position, state: 'pointing', visible: true, anchorSource: source === 'hand' ? 'aim' : 'native', quality: 'tracked' },
     events,
   })
   const event = (type: UiInputEvent['type'], position: UiPoint, reason?: 'released' | 'tracking_lost'): UiInputEvent => ({
@@ -33,15 +33,16 @@ describe('InteractionKernel hit testing and selection', () => {
   it('enters once, remains without repetition, and leaves once', () => {
     const { bridge, kernel, publish } = harness()
     kernel.registerTarget({ id: 'a', kind: 'button', zRank: 1, enabled: true, getBounds: bounds(100, 100, 300, 300) })
-    const changes: Array<string | null> = []
+    const changes: Array<string | null> = [null]
     bridge.subscribe(() => {
       const hovered = bridge.getSnapshot().hoveredId
       if (changes.at(-1) !== hovered) changes.push(hovered)
     })
     publish('hand', point(.2, .2))
-    publish('hand', point(.25, .25))
-    publish('hand', point(.8, .8))
-    expect(changes).toEqual(['a', null])
+    publish('hand', point(.25, .25), [], 56)
+    publish('hand', point(.8, .8), [], 120)
+    publish('hand', point(.8, .8), [], 256)
+    expect(changes).toEqual([null, 'a', null])
   })
 
   it('presses inside and activates once only on a released end over the original target', () => {
@@ -65,17 +66,91 @@ describe('InteractionKernel hit testing and selection', () => {
     expect(activate).not.toHaveBeenCalled()
   })
 
-  it('uses z-rank then newest registration and lets a disabled top target occlude', () => {
+  it('uses deterministic stable IDs after exactness, distance, z, and semantics while disabled exact targets occlude', () => {
     const { bridge, kernel, publish, event } = harness()
     const low = vi.fn()
     kernel.registerTarget({ id: 'low', kind: 'button', zRank: 1, enabled: true, getBounds: bounds(0, 0, 500, 500), activate: low })
     kernel.registerTarget({ id: 'newest', kind: 'button', zRank: 1, enabled: true, getBounds: bounds(0, 0, 500, 500) })
     publish('hand', point(.2, .2))
-    expect(bridge.getSnapshot().hoveredId).toBe('newest')
+    publish('hand', point(.2, .2), [], 56)
+    expect(bridge.getSnapshot().hoveredId).toBe('low')
     kernel.registerTarget({ id: 'disabled', kind: 'button', zRank: 2, enabled: false, getBounds: bounds(0, 0, 500, 500) })
     publish('hand', point(.2, .2), [event('pressstart', point(.2, .2)), event('pressend', point(.2, .2), 'released')])
-    expect(bridge.getSnapshot()).toMatchObject({ hoveredId: 'disabled', pressedId: null })
+    expect(bridge.getSnapshot()).toMatchObject({ hoveredId: 'low', pressedId: null })
     expect(low).not.toHaveBeenCalled()
+  })
+
+  it('acquires a narrow header through hand-only padding while native pointer remains exact', () => {
+    const { bridge, kernel, publish, event } = harness()
+    kernel.registerTarget({ id: 'header', kind: 'panel-header', zRank: 1, enabled: true, getBounds: bounds(100, 100, 400, 110) })
+    publish('pointer', point(.2, .084), [event('pressstart', point(.2, .084))])
+    expect(bridge.getSnapshot().pressedId).toBeNull()
+    publish('hand', point(.2, .084), [event('pressstart', point(.2, .084))])
+    expect(bridge.getSnapshot()).toMatchObject({ pressedId: 'header', capturedId: 'header' })
+  })
+
+  it('activates a hand capture released outside exact bounds within origin slop and cancels beyond it', () => {
+    const { kernel, publish, event } = harness()
+    const activate = vi.fn()
+    kernel.registerTarget({ id: 'narrow', kind: 'button', zRank: 1, enabled: true, getBounds: bounds(195, 195, 205, 205), activate })
+    publish('hand', point(.2, .2), [event('pressstart', point(.2, .2))])
+    publish('hand', point(.225, .2), [event('pressend', point(.225, .2), 'released')])
+    publish('hand', point(.2, .2), [event('pressstart', point(.2, .2))])
+    publish('hand', point(.24, .2), [event('pressend', point(.24, .2), 'released')])
+    expect(activate).toHaveBeenCalledOnce()
+  })
+
+  it('never activates after drag and preserves ordered capture diagnostics', () => {
+    const { bridge, kernel, publish, event } = harness()
+    const activate = vi.fn()
+    kernel.registerTarget({ id: 'a', kind: 'button', zRank: 1, enabled: true, getBounds: bounds(100, 100, 300, 300), activate })
+    publish('hand', point(.2, .2), [event('pressstart', point(.2, .2)), event('dragstart', point(.2, .2))])
+    expect(bridge.getSnapshot()).toMatchObject({ capturedId: 'a', dragTargetId: 'a' })
+    publish('hand', point(.2, .2), [event('dragend', point(.2, .2), 'released'), event('pressend', point(.2, .2), 'released')])
+    expect(activate).not.toHaveBeenCalled()
+    expect(bridge.getSnapshot().history.map((entry) => entry.transition)).toEqual(['pressstart', 'dragstart', 'dragend', 'pressend'])
+  })
+
+  it('holds hover through border jitter and resolves padded overlaps deterministically', () => {
+    const { bridge, kernel, publish } = harness()
+    kernel.registerTarget({ id: 'zeta', kind: 'button', zRank: 1, enabled: true, getBounds: bounds(100, 100, 120, 120) })
+    kernel.registerTarget({ id: 'alpha', kind: 'button', zRank: 1, enabled: true, getBounds: bounds(130, 100, 150, 120) })
+    publish('hand', point(.125, .11), [], 0)
+    publish('hand', point(.125, .11), [], 56)
+    expect(bridge.getSnapshot().hoveredId).toBe('alpha')
+    publish('hand', point(.151, .11), [], 70)
+    publish('hand', point(.151, .11), [], 130)
+    expect(bridge.getSnapshot().hoveredId).toBe('alpha')
+  })
+
+  it('uses an eight-pixel and eighty-millisecond exit band at the padded hover border', () => {
+    const { bridge, kernel, publish } = harness()
+    kernel.registerTarget({ id: 'a', kind: 'button', zRank: 1, enabled: true, getBounds: bounds(100, 100, 120, 120) })
+    publish('hand', point(.11, .11), [], 0)
+    publish('hand', point(.11, .11), [], 56)
+    publish('hand', point(.135, .11), [], 70)
+    publish('hand', point(.135, .11), [], 149)
+    expect(bridge.getSnapshot().hoveredId).toBe('a')
+    publish('hand', point(.135, .11), [], 151)
+    expect(bridge.getSnapshot().hoveredId).toBeNull()
+  })
+
+  it('bounds semantic transition history to the latest eight records', () => {
+    const { bridge, kernel, publish, event } = harness()
+    kernel.registerTarget({ id: 'a', kind: 'button', zRank: 1, enabled: true, getBounds: bounds(100, 100, 300, 300) })
+    for (let index = 0; index < 5; index += 1) {
+      publish('hand', point(.2, .2), [event('pressstart', point(.2, .2)), event('pressend', point(.2, .2), 'released')])
+    }
+    expect(bridge.getSnapshot().history).toHaveLength(8)
+    expect(bridge.getSnapshot().history.at(-1)?.transition).toBe('pressend')
+  })
+
+  it('lets an exact close control outrank a padded header overlap', () => {
+    const { bridge, kernel, publish, event } = harness()
+    kernel.registerTarget({ id: 'header', kind: 'panel-header', zRank: 10, enabled: true, getBounds: bounds(100, 100, 400, 150) })
+    kernel.registerTarget({ id: 'close', kind: 'control', zRank: 11, enabled: true, getBounds: bounds(380, 100, 400, 150) })
+    publish('hand', point(.39, .12), [event('pressstart', point(.39, .12))])
+    expect(bridge.getSnapshot().pressedId).toBe('close')
   })
 
   it('clears hovered and cancels pressed target removal', () => {

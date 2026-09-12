@@ -8,7 +8,12 @@ const snapshot = (hoveredId: string | null = null): UiSemanticSnapshot => Object
   hoveredId,
   pressedId: null,
   capturedId: null,
+  dragTargetId: null,
   activeSource: null,
+  pointerQuality: null,
+  lastTransition: null,
+  terminationReason: null,
+  history: Object.freeze([]),
   panels: Object.freeze({}),
   debug: true,
 })
@@ -23,6 +28,8 @@ const interactionFrame = (): InteractionFrame => ({
     active: true,
     tracked: true,
     stale: false,
+    anchorSource: 'pinch',
+    quality: 'tracked',
   },
   state: 'dragging',
   drag: null,
@@ -31,6 +38,11 @@ const interactionFrame = (): InteractionFrame => ({
     { type: 'dragstart', timestampMs: 15, position: { x: 0.25, y: 0.4 }, velocity: { x: 1, y: 0, magnitude: 1 }, drag: { startPosition: { x: 0.2, y: 0.4 }, currentPosition: { x: 0.25, y: 0.4 }, delta: { x: 0.05, y: 0 }, totalDelta: { x: 0.05, y: 0 }, distance: 0.05, pathLength: 0.05, durationMs: 5 } },
     { type: 'dragmove', timestampMs: 20, position: { x: 0.3, y: 0.4 }, velocity: { x: 1, y: 0, magnitude: 1 }, drag: { startPosition: { x: 0.2, y: 0.4 }, currentPosition: { x: 0.3, y: 0.4 }, delta: { x: 0.05, y: 0 }, totalDelta: { x: 0.1, y: 0 }, distance: 0.1, pathLength: 0.1, durationMs: 10 } },
   ],
+  rawGesture: 'pinch',
+  stableGesture: 'pinch',
+  pinchEvidence: { phase: 'closed', normalizedDistance: 0.24 },
+  lastTransition: 'dragstart',
+  terminationReason: null,
 })
 
 describe('InteractionBridge', () => {
@@ -39,6 +51,29 @@ describe('InteractionBridge', () => {
     const bridge = new InteractionBridge(initial)
     bridge.publishInteractionFrame(interactionFrame())
     expect(bridge.getSnapshot()).toBe(initial)
+  })
+
+  it('preserves hand evidence, primary identity, pointer anchor, quality, and reasons on the frame channel', () => {
+    const bridge = new InteractionBridge(snapshot())
+    const received: unknown[] = []
+    bridge.subscribeFrames((frame) => received.push(frame))
+    const source = interactionFrame()
+    source.pointer = { ...source.pointer!, stale: true, tracked: false, anchorSource: 'retained', quality: 'grace' }
+    source.terminationReason = 'gesture_ambiguous'
+    bridge.publishInteractionFrame(source)
+    expect(received[0]).toMatchObject({
+      source: 'hand',
+      pointer: { anchorSource: 'retained', quality: 'grace', state: 'stale' },
+      diagnostics: {
+        primaryTrackId: 1,
+        rawGesture: 'pinch',
+        stableGesture: 'pinch',
+        pinchPhase: 'closed',
+        pinchDistance: 0.24,
+        lastTransition: 'dragstart',
+        terminationReason: 'gesture_ambiguous',
+      },
+    })
   })
 
   it('uses a new immutable identity only for semantic changes', () => {

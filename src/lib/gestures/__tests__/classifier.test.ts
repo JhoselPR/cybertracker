@@ -25,6 +25,21 @@ describe('static gesture classification', () => {
     expect(pinch.position.x).toBeCloseTo((pinchHand.landmarks[4].x + pinchHand.landmarks[8].x) / 2)
     const pointHand = makeHand('point')
     expect(classifyGesture(pointHand, context).position).toEqual(pointHand.landmarks[8])
+    expect(pinch.anchors.aim).toEqual(pinchHand.landmarks[8])
+    expect(pinch.anchors.pinch).toEqual(pinch.position)
+  })
+
+  it('reports closed, ambiguous, open, and unavailable pinch evidence explicitly', () => {
+    const closed = classifyGesture(makeHand('pinch'), context)
+    const ambiguousHand = makeHand('pinch')
+    ambiguousHand.landmarks[4] = { ...ambiguousHand.landmarks[8], x: ambiguousHand.landmarks[8].x + 0.18 }
+    const openHand = makeHand('pinch')
+    openHand.landmarks[4] = { ...openHand.landmarks[8], x: openHand.landmarks[8].x + 0.3 }
+    const malformed = { ...makeHand('pinch'), landmarks: makeHand('pinch').landmarks.slice(0, 8) }
+    expect(closed.pinchEvidence.phase).toBe('closed')
+    expect(classifyGesture(ambiguousHand, context).pinchEvidence.phase).toBe('ambiguous')
+    expect(classifyGesture(openHand, context).pinchEvidence.phase).toBe('open')
+    expect(classifyGesture(malformed, context).pinchEvidence).toEqual({ phase: 'unavailable', normalizedDistance: null })
   })
 
   it('prefers unknown for ambiguous, malformed, and degenerate poses', () => {

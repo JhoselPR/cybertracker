@@ -8,6 +8,8 @@ interface HudButtonProps {
   label: string
   hovered: boolean
   pressed: boolean
+  captured?: boolean
+  dragging?: boolean
   disabled?: boolean
   zRank?: number
   kind?: TargetKind
@@ -22,6 +24,8 @@ export function HudButton({
   label,
   hovered,
   pressed,
+  captured = false,
+  dragging = false,
   disabled = false,
   zRank = 100,
   kind = 'button',
@@ -61,6 +65,8 @@ export function HudButton({
       data-target-id={id}
       data-hovered={hovered || undefined}
       data-pressed={pressed || undefined}
+      data-captured={captured || undefined}
+      data-dragging={dragging || undefined}
       disabled={disabled}
       aria-label={label}
       onClick={handleClick}

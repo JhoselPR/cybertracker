@@ -64,4 +64,20 @@ describe('gesture stabilization', () => {
     expect(swapped[1].trackId).toBe(first[0].trackId)
     expect(swapped[1].stable.gesture).toBe('open_palm')
   })
+
+  it('requires continuously closed evidence to acquire pinch through stabilization', () => {
+    const stabilizer = new GestureStabilizer()
+    expect(stabilizer.stabilize([{ hand: makeHand('pinch'), raw: rawGesture('pinch', .9, 'closed') }], 0, context)[0].stable.gesture).toBe('unknown')
+    expect(stabilizer.stabilize([{ hand: makeHand('pinch'), raw: rawGesture('unknown', 0, 'ambiguous') }], 80, context)[0].stable.gesture).toBe('unknown')
+    expect(stabilizer.stabilize([{ hand: makeHand('pinch'), raw: rawGesture('pinch', .9, 'closed') }], 130, context)[0].stable.gesture).toBe('unknown')
+    expect(stabilizer.stabilize([{ hand: makeHand('pinch'), raw: rawGesture('pinch', .9, 'closed') }], 261, context)[0].stable.gesture).toBe('pinch')
+  })
+
+  it('holds a stable pinch in the hysteresis band and exits promptly on clear open evidence', () => {
+    const stabilizer = new GestureStabilizer()
+    stabilizer.stabilize([{ hand: makeHand('pinch'), raw: rawGesture('pinch', .9, 'closed') }], 0, context)
+    expect(stabilizer.stabilize([{ hand: makeHand('pinch'), raw: rawGesture('pinch', .9, 'closed') }], 130, context)[0].stable.gesture).toBe('pinch')
+    expect(stabilizer.stabilize([{ hand: makeHand('pinch'), raw: rawGesture('unknown', 0, 'ambiguous') }], 400, context)[0].stable.gesture).toBe('pinch')
+    expect(stabilizer.stabilize([{ hand: makeHand('point'), raw: rawGesture('point', .9, 'open') }], 416, context)[0].stable.gesture).toBe('point')
+  })
 })

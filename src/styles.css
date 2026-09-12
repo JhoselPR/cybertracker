@@ -174,6 +174,10 @@ button:focus-visible {
   background: rgba(54, 31, 4, .86);
 }
 
+.hud-control[data-captured="true"],
+.hud-button[data-captured="true"] { outline: 1px solid rgba(255, 185, 74, .72); outline-offset: 2px; }
+.hud-button[data-dragging="true"] { color: #ff8ac9; outline-color: #ed68b7; }
+
 .hud-control-system { top: max(74px, 14vh); left: max(24px, 6vw); }
 .hud-control-system::before,
 .hud-control-hardware::before { right: -16px; }
@@ -242,7 +246,9 @@ button:focus-visible {
   user-select: none;
 }
 
-.hud-panel-header[data-dragging="true"] { border-bottom-color: #d84ca3; }
+.hud-panel-header[data-captured="true"] { border-bottom-color: #ffb94a; background: rgba(40, 28, 8, .96); }
+.hud-panel-header[data-hovered="true"] { border-bottom-color: #81f9ff; }
+.hud-panel-header[data-dragging="true"] { border-bottom-color: #ed68b7; background: rgba(39, 8, 29, .96); }
 
 .panel-index {
   justify-self: center;
@@ -311,6 +317,7 @@ button:focus-visible {
 .spatial-cursor[data-state="dragging"] { color: #ed68b7; }
 .spatial-cursor[data-state="dragging"] .cursor-reticle { inset: 2px; }
 .spatial-cursor[data-state="stale"] { opacity: .38; }
+.spatial-cursor[data-quality="grace"] .cursor-reticle { border-style: dashed; }
 
 .debug-panel {
   position: absolute;
@@ -348,6 +355,7 @@ button:focus-visible {
 .debug-gestures { margin-top: 3px; color: #a9dadd; }
 .debug-fingers { grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 4px; color: #81f9ff; }
 .debug-hand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.debug-history { display: grid; gap: 1px; max-height: 4.5em; margin-top: 5px; overflow: hidden; color: #a9dadd; }
 
 .status-overlay {
   position: absolute;

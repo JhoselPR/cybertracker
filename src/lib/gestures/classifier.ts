@@ -23,10 +23,10 @@ function scoresFor(
   fingers: FingerEvidenceMap,
   scale: number,
   context: GeometryContext,
+  pinchDistance: number,
 ): GestureScores {
   const nonThumb = [fingers.index, fingers.middle, fingers.ring, fingers.pinky]
   const thumbCompatibility = 0.8 + 0.2 * Math.max(fingers.thumb.extended, fingers.thumb.folded)
-  const pinchDistance = normalizedDistance(landmarks[4], landmarks[8], scale, context)
   const separation = normalizedDistance(landmarks[8], landmarks[12], scale, context)
 
   return {
@@ -56,6 +56,8 @@ function unknownResult(position: NormalizedLandmark): RawGestureResult {
     scores: { open_palm: 0, fist: 0, point: 0, pinch: 0, victory: 0 },
     fingers: { thumb: 'ambiguous', index: 'ambiguous', middle: 'ambiguous', ring: 'ambiguous', pinky: 'ambiguous' },
     position,
+    anchors: { aim: null, pinch: null },
+    pinchEvidence: { phase: 'unavailable', normalizedDistance: null },
   }
 }
 
@@ -63,11 +65,19 @@ export function classifyGesture(hand: TrackedHand, context: GeometryContext): Ra
   const analysis = extractFingerStates(hand.landmarks, hand.handedness, context)
   if (!analysis.valid) return unknownResult(analysis.palm)
 
-  const scores = scoresFor(hand.landmarks, analysis.fingers, analysis.scale, context)
+  const aim = { ...hand.landmarks[8] }
+  const pinch = midpoint(hand.landmarks[4], hand.landmarks[8])
+  const pinchDistance = normalizedDistance(hand.landmarks[4], hand.landmarks[8], analysis.scale, context)
+  const pinchPhase = pinchDistance <= T.pinch.enterDistance
+    ? 'closed'
+    : pinchDistance >= T.pinch.exitDistance
+      ? 'open'
+      : 'ambiguous'
+  const scores = scoresFor(hand.landmarks, analysis.fingers, analysis.scale, context, pinchDistance)
   let gesture: Gesture = 'unknown'
   let confidence = Math.max(...Object.values(scores))
 
-  if (scores.pinch >= T.acceptance.pinch) {
+  if (pinchPhase === 'closed') {
     gesture = 'pinch'
     confidence = scores.pinch
   } else {
@@ -92,5 +102,7 @@ export function classifyGesture(hand: TrackedHand, context: GeometryContext): Ra
     scores,
     fingers: toFingerStates(analysis.fingers),
     position,
+    anchors: { aim, pinch },
+    pinchEvidence: { phase: pinchPhase, normalizedDistance: pinchDistance },
   }
 }

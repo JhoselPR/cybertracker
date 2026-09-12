@@ -12,7 +12,7 @@ import type {
 const clonePoint = (point: UiPoint): UiPoint => ({ x: point.x, y: point.y })
 
 function endReason(reason: string): UiEndReason {
-  if (reason === 'released' || reason === 'tracking_lost') return reason
+  if (reason === 'released' || reason === 'tracking_lost' || reason === 'gesture_ambiguous') return reason
   return 'source_cancelled'
 }
 
@@ -38,8 +38,22 @@ function cloneInteractionFrame(frame: InteractionFrame): UiInputFrame {
       position: clonePoint(frame.pointer.position),
       state: pointerState,
       visible: frame.pointer.tracked || frame.pointer.stale,
+      anchorSource: frame.pointer.anchorSource,
+      quality: frame.pointer.quality,
     } : null,
     events,
+    diagnostics: {
+      primaryTrackId: frame.primaryTrackId,
+      rawGesture: frame.rawGesture,
+      stableGesture: frame.stableGesture,
+      pinchPhase: frame.pinchEvidence?.phase ?? null,
+      pinchDistance: frame.pinchEvidence?.normalizedDistance ?? null,
+      interactionState: pointerState,
+      anchorSource: frame.pointer?.anchorSource ?? null,
+      pointerQuality: frame.pointer?.quality ?? null,
+      lastTransition: frame.lastTransition,
+      terminationReason: frame.terminationReason ? endReason(frame.terminationReason) : null,
+    },
   }
 }
 
@@ -82,6 +96,7 @@ export class InteractionBridge {
         ...event,
         position: event.position ? clonePoint(event.position) : null,
       })) as UiInputEvent[],
+      diagnostics: frame.diagnostics ? { ...frame.diagnostics } : undefined,
     }
 
     this.publishing = true

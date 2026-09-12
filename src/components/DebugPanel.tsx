@@ -1,5 +1,6 @@
 import type { FingerName } from '../types/gestures'
 import type { TrackingDebugSnapshot } from '../types/tracking'
+import type { UiSemanticSnapshot } from '../lib/interaction-bridge'
 
 const FINGER_LABELS: Array<[FingerName, string]> = [
   ['thumb', 'T'],
@@ -11,9 +12,10 @@ const FINGER_LABELS: Array<[FingerName, string]> = [
 
 interface DebugPanelProps {
   snapshot: TrackingDebugSnapshot
+  semantics: UiSemanticSnapshot
 }
 
-export function DebugPanel({ snapshot }: DebugPanelProps) {
+export function DebugPanel({ snapshot, semantics }: DebugPanelProps) {
   const interaction = snapshot.interaction
   const pointer = interaction?.pointer
   const drag = interaction?.drag
@@ -54,10 +56,28 @@ export function DebugPanel({ snapshot }: DebugPanelProps) {
             ? `H${interaction.primaryHand.trackId} ${interaction.primaryHand.handedness.toUpperCase()}`
             : '—'}</span>
           <span>STATE</span><span>{interaction?.state.toUpperCase() ?? 'IDLE'}</span>
+          <span>SOURCE</span><span>{semantics.activeSource?.toUpperCase() ?? '—'}</span>
+          <span>GESTURE</span><span>{interaction ? `${interaction.rawGesture ?? '—'} / ${interaction.stableGesture ?? '—'}`.toUpperCase() : '—'}</span>
+          <span>PINCH</span><span>{interaction?.pinchEvidence
+            ? `${interaction.pinchEvidence.phase.toUpperCase()} ${interaction.pinchEvidence.normalizedDistance?.toFixed(3) ?? '—'}`
+            : '—'}</span>
           <span>POINTER</span><span>{pointer ? `${pointer.position.x.toFixed(3)} ${pointer.position.y.toFixed(3)}` : '—'}</span>
+          <span>ANCHOR</span><span>{pointer ? `${pointer.anchorSource.toUpperCase()} / ${pointer.quality.toUpperCase()}` : '—'}</span>
           <span>VELOCITY</span><span>{pointer ? `${pointer.velocity.x.toFixed(2)} ${pointer.velocity.y.toFixed(2)} | ${pointer.velocity.magnitude.toFixed(2)}` : '—'}</span>
           <span>DRAG</span><span>{drag ? `${drag.totalDelta.x.toFixed(3)} ${drag.totalDelta.y.toFixed(3)} | ${drag.distance.toFixed(3)} | ${Math.round(drag.durationMs)}ms` : '—'}</span>
           <span>EVENT</span><span>{lastEvent?.type.toUpperCase() ?? '—'}</span>
+          <span>HOVERED</span><span>{semantics.hoveredId ?? '—'}</span>
+          <span>CAPTURED</span><span>{semantics.capturedId ?? '—'}</span>
+          <span>DRAG TARGET</span><span>{semantics.dragTargetId ?? '—'}</span>
+          <span>END</span><span>{interaction?.terminationReason?.toUpperCase() ?? semantics.terminationReason?.toUpperCase() ?? '—'}</span>
+          <span>TRANSITION</span><span>{interaction?.lastTransition?.toUpperCase() ?? semantics.lastTransition?.toUpperCase() ?? '—'}</span>
+        </div>
+        <div className="debug-history" aria-label="Recent interaction transitions">
+          {semantics.history.map((entry) => (
+            <span key={`${entry.timestampMs}:${entry.transition}:${entry.targetId ?? ''}`}>
+              {entry.transition.toUpperCase()} {entry.targetId ?? '—'} {entry.reason?.toUpperCase() ?? ''}
+            </span>
+          ))}
         </div>
       </div>
     </aside>

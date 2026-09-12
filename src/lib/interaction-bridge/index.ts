@@ -10,6 +10,10 @@ export type {
   UiInputSource,
   UiPoint,
   UiPointer,
+  UiPointerAnchorSource,
+  UiPointerQuality,
   UiPointerState,
+  UiHandDiagnostics,
   UiSemanticSnapshot,
+  UiTransitionRecord,
 } from './types'

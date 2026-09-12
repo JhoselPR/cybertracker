@@ -24,6 +24,7 @@ export function SpatialCursor({ runtime }: SpatialCursorProps) {
       cursor.style.visibility = 'visible'
       cursor.style.transform = `translate3d(${pointer.position.x * window.innerWidth}px, ${pointer.position.y * window.innerHeight}px, 0)`
       cursor.dataset.state = pointer.state
+      cursor.dataset.quality = pointer.quality
     }
     const unsubscribe = runtime.bridge.subscribeFrames((frame) => {
       const activeSource = runtime.bridge.getSnapshot().activeSource

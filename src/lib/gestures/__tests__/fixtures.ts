@@ -1,4 +1,4 @@
-import type { Gesture, RawGestureResult } from '../../../types/gestures'
+import type { Gesture, PinchEvidencePhase, RawGestureResult } from '../../../types/gestures'
 import type { Handedness, NormalizedLandmark, TrackedHand } from '../../../types/tracking'
 
 type Pose = 'open_palm' | 'fist' | 'point' | 'pinch' | 'victory' | 'ambiguous'
@@ -101,12 +101,22 @@ export function makeHand(
   return { landmarks, handedness, confidence: 0.95 }
 }
 
-export function rawGesture(gesture: Gesture, confidence = 0.9): RawGestureResult {
+export function rawGesture(
+  gesture: Gesture,
+  confidence = 0.9,
+  pinchPhase: PinchEvidencePhase = gesture === 'pinch' ? 'closed' : 'open',
+): RawGestureResult {
+  const position = { x: 0.5, y: 0.5, z: 0 }
   return {
     gesture,
     confidence: gesture === 'unknown' ? 0 : confidence,
     scores: { open_palm: 0, fist: 0, point: 0, pinch: 0, victory: 0 },
     fingers: { thumb: 'ambiguous', index: 'ambiguous', middle: 'ambiguous', ring: 'ambiguous', pinky: 'ambiguous' },
-    position: { x: 0.5, y: 0.5, z: 0 },
+    position,
+    anchors: { aim: position, pinch: position },
+    pinchEvidence: {
+      phase: pinchPhase,
+      normalizedDistance: pinchPhase === 'unavailable' ? null : pinchPhase === 'closed' ? 0.2 : pinchPhase === 'open' ? 0.5 : 0.36,
+    },
   }
 }

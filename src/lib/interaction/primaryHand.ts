@@ -1,8 +1,9 @@
 import type { EnrichedHand } from '../../types/gestures'
 
-function hasValidIndexTip(hand: EnrichedHand): boolean {
-  const tip = hand.landmarks[8]
-  return Boolean(tip && Number.isFinite(tip.x) && Number.isFinite(tip.y))
+function hasValidAnchor(hand: EnrichedHand): boolean {
+  return [hand.rawGesture.anchors.aim, hand.rawGesture.anchors.pinch].some((anchor) => (
+    anchor && Number.isFinite(anchor.x) && Number.isFinite(anchor.y)
+  ))
 }
 
 function isInteractive(hand: EnrichedHand): boolean {
@@ -11,7 +12,7 @@ function isInteractive(hand: EnrichedHand): boolean {
 
 /** Interactive gestures rank first; non-interactive hands provide the visual-pointer fallback. */
 export function selectPrimaryHand(hands: readonly EnrichedHand[]): EnrichedHand | null {
-  const candidates = hands.filter(hasValidIndexTip)
+  const candidates = hands.filter(hasValidAnchor)
   candidates.sort((a, b) => {
     const intentRank = Number(isInteractive(b)) - Number(isInteractive(a))
     if (intentRank !== 0) return intentRank
@@ -22,5 +23,5 @@ export function selectPrimaryHand(hands: readonly EnrichedHand[]): EnrichedHand 
 }
 
 export function findPrimaryHand(hands: readonly EnrichedHand[], trackId: number): EnrichedHand | null {
-  return hands.find((hand) => hand.trackId === trackId && hasValidIndexTip(hand)) ?? null
+  return hands.find((hand) => hand.trackId === trackId) ?? null
 }

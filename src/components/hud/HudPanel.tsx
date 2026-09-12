@@ -7,11 +7,13 @@ interface HudPanelProps {
   panel: Readonly<HudPanelState>
   hoveredId: string | null
   pressedId: string | null
+  capturedId: string | null
+  dragTargetId: string | null
   title: string
   children: ReactNode
 }
 
-export function HudPanel({ runtime, panel, hoveredId, pressedId, title, children }: HudPanelProps) {
+export function HudPanel({ runtime, panel, hoveredId, pressedId, capturedId, dragTargetId, title, children }: HudPanelProps) {
   const panelRef = useRef<HTMLElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
   const positionRef = useRef(panel.position)
@@ -60,7 +62,13 @@ export function HudPanel({ runtime, panel, hoveredId, pressedId, title, children
 
   return (
     <section ref={panelRef} className="hud-panel" style={{ zIndex: panel.z + 20 }} aria-labelledby={`${panel.id}-title`}>
-      <div ref={headerRef} className="hud-panel-header" data-dragging={pressedId === headerId || undefined}>
+      <div
+        ref={headerRef}
+        className="hud-panel-header"
+        data-hovered={hoveredId === headerId || undefined}
+        data-captured={capturedId === headerId || undefined}
+        data-dragging={dragTargetId === headerId || undefined}
+      >
         <span className="panel-index" aria-hidden="true">{panel.id.slice(0, 2).toUpperCase()}</span>
         <h2 id={`${panel.id}-title`}>{title}</h2>
         <HudButton
@@ -72,6 +80,8 @@ export function HudPanel({ runtime, panel, hoveredId, pressedId, title, children
           zRank={panel.z * 1000 + 1}
           hovered={hoveredId === closeId}
           pressed={pressedId === closeId}
+          captured={capturedId === closeId}
+          dragging={dragTargetId === closeId}
           onActivate={() => runtime.kernel.closePanel(panel.id)}
         >
           <span aria-hidden="true">CLOSE</span>

@@ -49,4 +49,5 @@ export interface ActivePointer {
   source: UiInputSource
   normalized: UiPoint
   client: UiPoint
+  timestampMs: number
 }

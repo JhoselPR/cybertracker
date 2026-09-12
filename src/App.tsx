@@ -31,7 +31,7 @@ export function App() {
       <CyberHud runtime={runtime} />
 
       {status.kind === 'ready' && snapshot.debug ? (
-        <DebugPanel snapshot={debug} />
+        <DebugPanel snapshot={debug} semantics={snapshot} />
       ) : status.kind !== 'ready' ? (
         <StatusOverlay status={status} onRetry={retry} />
       ) : null}

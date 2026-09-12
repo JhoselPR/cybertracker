@@ -69,6 +69,8 @@ export class GestureStabilizer {
           gesture: track.stableGesture,
           confidence: track.stableGesture === 'unknown' ? 0 : track.stableConfidence,
           position: track.stablePosition,
+          anchors: input.raw.anchors,
+          pinchEvidence: input.raw.pinchEvidence,
         },
       }
     }
@@ -146,7 +148,27 @@ export class GestureStabilizer {
     track.scale = geometry.scale
     if (handedness !== 'Unknown') track.handedness = handedness
 
+    if (track.stableGesture === 'pinch') {
+      if (raw.pinchEvidence.phase === 'closed') {
+        track.unknownSinceMs = null
+        track.stableConfidence += (raw.confidence - track.stableConfidence) * POLICY.confidenceSmoothing
+        track.stablePosition = raw.anchors.pinch ?? track.stablePosition
+        this.startCandidate(track, 'pinch', timestampMs, raw.confidence)
+        return
+      }
+      if (raw.pinchEvidence.phase === 'ambiguous' || raw.pinchEvidence.phase === 'unavailable') return
+
+      // Clear open evidence exits pinch immediately; ambiguous evidence never impersonates release.
+      track.stableGesture = raw.gesture
+      track.stableConfidence = raw.gesture === 'unknown' ? 0 : raw.confidence
+      track.stablePosition = raw.position
+      track.unknownSinceMs = raw.gesture === 'unknown' ? timestampMs : null
+      this.startCandidate(track, raw.gesture, timestampMs, raw.confidence)
+      return
+    }
+
     if (raw.gesture === 'unknown') {
+      if (track.candidateGesture === 'pinch') this.startCandidate(track, 'unknown', timestampMs, 0)
       track.unknownSinceMs ??= timestampMs
       if (timestampMs - track.unknownSinceMs >= POLICY.unknownGraceMs) {
         track.stableGesture = 'unknown'

@@ -1,4 +1,5 @@
 import type { Handedness } from './tracking'
+import type { Gesture, PinchEvidence } from './gestures'
 
 export interface Position2D {
   /** Normalized viewport coordinate in the inclusive range [0, 1]. */
@@ -25,10 +26,12 @@ export interface VirtualPointer {
   tracked: boolean
   /** True while a previously tracked primary is inside the loss grace period. */
   stale: boolean
+  anchorSource: 'aim' | 'pinch' | 'retained'
+  quality: 'tracked' | 'stale' | 'grace'
 }
 
 export type InteractionState = 'idle' | 'pointing' | 'pinching' | 'dragging'
-export type InteractionEndReason = 'released' | 'tracking_lost' | 'primary_changed' | 'geometry_changed'
+export type InteractionEndReason = 'released' | 'gesture_ambiguous' | 'tracking_lost' | 'primary_changed' | 'geometry_changed'
 
 export interface PrimaryHand {
   trackId: number
@@ -101,6 +104,11 @@ export interface InteractionFrame {
   state: InteractionState
   drag: DragSnapshot | null
   events: InteractionEvent[]
+  rawGesture: Gesture | null
+  stableGesture: Gesture | null
+  pinchEvidence: PinchEvidence | null
+  lastTransition: string | null
+  terminationReason: InteractionEndReason | null
 }
 
 export interface InteractionContext {
@@ -117,4 +125,5 @@ export interface InteractionEngineOptions {
   derivativeCutoff: number
   dragThreshold: number
   trackingLossGraceMs: number
+  interactionGraceMs: number
 }

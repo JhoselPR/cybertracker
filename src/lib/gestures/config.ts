@@ -1,4 +1,5 @@
 import type { Gesture } from '../../types/gestures'
+import { HAND_INTERACTION_POLICY } from '../interactionPolicy'
 
 export const GESTURE_THRESHOLDS = {
   finger: {
@@ -23,6 +24,8 @@ export const GESTURE_THRESHOLDS = {
   pinch: {
     distanceFull: 0.2,
     distanceZero: 0.5,
+    enterDistance: HAND_INTERACTION_POLICY.pinchEnterThreshold,
+    exitDistance: HAND_INTERACTION_POLICY.pinchExitThreshold,
   },
   victory: {
     separationZero: 0.3,

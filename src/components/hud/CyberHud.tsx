@@ -55,6 +55,8 @@ export function CyberHud({ runtime }: CyberHudProps) {
               className={`hud-control hud-control-${id}`}
               hovered={snapshot.hoveredId === targetId}
               pressed={snapshot.pressedId === targetId}
+              captured={snapshot.capturedId === targetId}
+              dragging={snapshot.dragTargetId === targetId}
               onActivate={() => runtime.kernel.openPanel(id)}
             />
           )
@@ -74,6 +76,8 @@ export function CyberHud({ runtime }: CyberHudProps) {
         zRank={5000}
         hovered={snapshot.hoveredId === 'debug-toggle'}
         pressed={snapshot.pressedId === 'debug-toggle'}
+        captured={snapshot.capturedId === 'debug-toggle'}
+        dragging={snapshot.dragTargetId === 'debug-toggle'}
         onActivate={() => runtime.kernel.toggleDebug()}
       >
         <span>DIAGNOSTICS {snapshot.debug ? 'ON' : 'OFF'}</span>
@@ -87,6 +91,8 @@ export function CyberHud({ runtime }: CyberHudProps) {
           title={panel.id.toUpperCase()}
           hoveredId={snapshot.hoveredId}
           pressedId={snapshot.pressedId}
+          capturedId={snapshot.capturedId}
+          dragTargetId={snapshot.dragTargetId}
         >
           <dl>
             {PANEL_CONTENT[panel.id].map((line) => {

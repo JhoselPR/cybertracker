@@ -20,7 +20,7 @@ export function attachPointerInput(element: HTMLElement, runtime: InteractionRun
     const frame: UiInputFrame = {
       source: 'pointer',
       timestampMs: event.timeStamp,
-      pointer: { position, state, visible: true },
+      pointer: { position, state, visible: true, anchorSource: 'native', quality: 'tracked' },
       events,
     }
     runtime.bridge.publishInputFrame(frame)
