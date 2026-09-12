@@ -1,0 +1,134 @@
+import type { EnrichedHand } from '../../types/gestures'
+import type { SpatialBasis, SpatialHandPose, SpatialVector2, SpatialVector3 } from '../../types/spatial'
+import type { NormalizedLandmark } from '../../types/tracking'
+import { projectSourceToViewport, viewportNormalizedToNdc } from '../coordinates'
+import { SPATIAL_POSE_POLICY } from './config'
+import { cross3, dot3, negateQuaternion, normalize3, quaternionDot, quaternionFromBasis, scale3, subtract3 } from './math'
+
+export interface SpatialProjectionContext {
+  sourceWidth: number
+  sourceHeight: number
+  viewportWidth: number
+  viewportHeight: number
+  mirrorX: boolean
+}
+
+const PALM = Object.freeze({ wrist: 0, index: 5, middle: 9, ring: 13, pinky: 17 })
+
+function finiteLandmark(value: NormalizedLandmark | undefined): value is NormalizedLandmark {
+  return Boolean(value && Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z))
+}
+
+function finiteAverage(values: readonly NormalizedLandmark[]): NormalizedLandmark | null {
+  const finite = values.filter(finiteLandmark)
+  if (finite.length !== values.length || finite.length === 0) return null
+  return {
+    x: finite.reduce((sum, value) => sum + value.x, 0) / finite.length,
+    y: finite.reduce((sum, value) => sum + value.y, 0) / finite.length,
+    z: finite.reduce((sum, value) => sum + value.z, 0) / finite.length,
+  }
+}
+
+function projected(point: NormalizedLandmark, context: SpatialProjectionContext): SpatialVector2 {
+  return projectSourceToViewport(
+    point,
+    context.sourceWidth,
+    context.sourceHeight,
+    context.viewportWidth,
+    context.viewportHeight,
+    context.mirrorX,
+  )
+}
+
+function displayPoint(point: NormalizedLandmark, centerZ: number, context: SpatialProjectionContext): SpatialVector3 {
+  const position = projected(point, context)
+  const shortest = Math.min(context.viewportWidth, context.viewportHeight)
+  return {
+    x: position.x * context.viewportWidth / shortest,
+    y: -position.y * context.viewportHeight / shortest,
+    // MediaPipe Z is relative evidence only; it is never interpreted as metric camera depth.
+    z: -(point.z - centerZ) * context.sourceWidth / shortest,
+  }
+}
+
+function distanceOnViewport(a: SpatialVector2, b: SpatialVector2, context: SpatialProjectionContext): number {
+  const shortest = Math.min(context.viewportWidth, context.viewportHeight)
+  return Math.hypot(
+    (b.x - a.x) * context.viewportWidth / shortest,
+    (b.y - a.y) * context.viewportHeight / shortest,
+  )
+}
+
+function fallbackOrientation(
+  pose: Omit<SpatialHandPose, 'basis' | 'normal' | 'quaternion'>,
+  previous: SpatialHandPose | null,
+): SpatialHandPose | null {
+  if (!previous || previous.trackId !== pose.trackId
+    || pose.timestampMs - previous.timestampMs > SPATIAL_POSE_POLICY.orientationFallbackMs) return null
+  return { ...pose, basis: previous.basis, normal: previous.normal, quaternion: previous.quaternion }
+}
+
+/**
+ * Maps normalized source landmarks through the shared cover/mirror projection, then into NDC/Three space.
+ * The hologram is an overlay: camera-depth occlusion is intentionally unavailable without segmentation.
+ */
+export function extractSpatialHandPose(
+  hand: EnrichedHand,
+  timestampMs: number,
+  context: SpatialProjectionContext,
+  previous: SpatialHandPose | null = null,
+): SpatialHandPose | null {
+  if (!Number.isFinite(timestampMs) || !Number.isFinite(hand.trackId) || hand.trackId < 0) return null
+  const points = PALM
+  const wrist = hand.landmarks[points.wrist]
+  const index = hand.landmarks[points.index]
+  const middle = hand.landmarks[points.middle]
+  const ring = hand.landmarks[points.ring]
+  const pinky = hand.landmarks[points.pinky]
+  if (![wrist, index, middle, ring, pinky].every(finiteLandmark)) return null
+
+  try {
+    const sourceCenter = finiteAverage([wrist, index, middle, ring, pinky])
+    if (!sourceCenter) return null
+    const center = projected(sourceCenter, context)
+    const anchor2 = viewportNormalizedToNdc(center)
+    const width = distanceOnViewport(projected(index, context), projected(pinky, context), context)
+    const length = distanceOnViewport(projected(wrist, context), projected(middle, context), context)
+    if (!Number.isFinite(width) || !Number.isFinite(length) || width < 1e-5 || length < 1e-5) return null
+    const scale = Math.max(
+      SPATIAL_POSE_POLICY.minimumScale,
+      Math.min(SPATIAL_POSE_POLICY.maximumScale, Math.sqrt(width * length)),
+    )
+    const partial = {
+      timestampMs,
+      trackId: hand.trackId,
+      handedness: hand.handedness,
+      confidence: hand.stableGesture.confidence,
+      center,
+      anchor: { ...anchor2, z: 0 },
+      scale,
+    }
+
+    const displayWrist = displayPoint(wrist, sourceCenter.z, context)
+    const displayIndex = displayPoint(index, sourceCenter.z, context)
+    const displayMiddle = displayPoint(middle, sourceCenter.z, context)
+    const displayPinky = displayPoint(pinky, sourceCenter.z, context)
+    const x = normalize3(subtract3(displayPinky, displayIndex))
+    const wristToFingers = subtract3(displayMiddle, displayWrist)
+    if (!x) return fallbackOrientation(partial, previous)
+    const y = normalize3(subtract3(wristToFingers, scale3(x, dot3(wristToFingers, x))))
+    if (!y) return fallbackOrientation(partial, previous)
+    const z = normalize3(cross3(x, y))
+    if (!z) return fallbackOrientation(partial, previous)
+    const basis: SpatialBasis = { x, y, z }
+    let quaternion = quaternionFromBasis(basis)
+
+    if (previous?.trackId === hand.trackId) {
+      if (dot3(z, previous.normal) < 0) return fallbackOrientation(partial, previous)
+      if (quaternionDot(quaternion, previous.quaternion) < 0) quaternion = negateQuaternion(quaternion)
+    }
+    return { ...partial, basis, normal: z, quaternion }
+  } catch {
+    return null
+  }
+}

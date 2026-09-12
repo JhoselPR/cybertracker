@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { getCoverTransform, projectSourceToViewport } from '../coverProjection'
+import {
+  getCoverTransform,
+  ndcToPerspectivePlane,
+  projectSourceToViewport,
+  viewportNormalizedToNdc,
+} from '../coverProjection'
 
 describe('cover projection', () => {
   it('keeps square source and viewport coordinates unchanged', () => {
@@ -39,4 +44,13 @@ describe('cover projection', () => {
       expect(() => getCoverTransform(1, 1, 1, invalid)).toThrow(RangeError)
     },
   )
+
+  it('maps viewport normalization into NDC and a perspective plane', () => {
+    expect(viewportNormalizedToNdc({ x: 0, y: 1 })).toEqual({ x: -1, y: -1 })
+    expect(viewportNormalizedToNdc({ x: 0.5, y: 0.5 })).toEqual({ x: 0, y: 0 })
+    const portrait = ndcToPerspectivePlane({ x: 1, y: 1 }, 900, 1600, 5, 45)
+    const landscape = ndcToPerspectivePlane({ x: 1, y: 1 }, 1600, 900, 5, 45)
+    expect(landscape.x).toBeGreaterThan(portrait.x)
+    expect(landscape.y).toBeCloseTo(portrait.y)
+  })
 })

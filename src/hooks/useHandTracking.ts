@@ -3,6 +3,7 @@ import type { InteractionRuntime } from '../lib/interaction-bridge'
 import { GestureEngine } from '../lib/gestures'
 import { InteractionEngine } from '../lib/interaction'
 import { clearTrackingCanvas, drawTrackingFrame } from '../lib/rendering/drawHands'
+import type { SpatialHandPoseRuntime } from '../lib/spatial'
 import { createHandTracker, type HandTracker } from '../lib/vision/handTracker'
 import type { TrackerStatus, TrackingDebugSnapshot } from '../types/tracking'
 import { getErrorMessage, isCameraPermissionError } from '../utils/errors'
@@ -16,6 +17,7 @@ export function useHandTracking(
   videoRef: RefObject<HTMLVideoElement | null>,
   canvasRef: RefObject<HTMLCanvasElement | null>,
   runtime: InteractionRuntime,
+  spatialRuntime: SpatialHandPoseRuntime,
   debugEnabledRef: RefObject<boolean>,
 ) {
   const [attempt, setAttempt] = useState(0)
@@ -47,6 +49,7 @@ export function useHandTracking(
     let canvasHasDiagnostics = false
 
     runtime.reset()
+    spatialRuntime.reset()
     setStatus({ kind: 'loading', message: 'Requesting camera access…' })
     setDebug(EMPTY_DEBUG)
 
@@ -66,6 +69,7 @@ export function useHandTracking(
       gestureEngine.dispose()
       interactionEngine.dispose()
       runtime.reset()
+      spatialRuntime.reset()
 
       if (video.srcObject === activeStream) video.srcObject = null
       activeStream?.getTracks().forEach((track) => {
@@ -129,6 +133,13 @@ export function useHandTracking(
               const enrichedFrame = gestureEngine.processFrame(frame, {
                 aspectRatio: video.videoWidth / video.videoHeight,
               })
+              spatialRuntime.channel.publish(spatialRuntime.engine.processFrame(enrichedFrame, {
+                sourceWidth: video.videoWidth,
+                sourceHeight: video.videoHeight,
+                viewportWidth: canvas.clientWidth,
+                viewportHeight: canvas.clientHeight,
+                mirrorX: true,
+              }))
               const interactionFrame = interactionEngine.processFrame(enrichedFrame, {
                 sourceWidth: video.videoWidth,
                 sourceHeight: video.videoHeight,
@@ -197,7 +208,7 @@ export function useHandTracking(
       cancelled = true
       stop()
     }
-  }, [attempt, canvasRef, debugEnabledRef, runtime, videoRef])
+  }, [attempt, canvasRef, debugEnabledRef, runtime, spatialRuntime, videoRef])
 
   return { status, debug, retry }
 }

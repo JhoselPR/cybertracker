@@ -1,1 +1,7 @@
-export { getCoverTransform, projectSourceToViewport, type CoverTransform } from './coverProjection'
+export {
+  getCoverTransform,
+  ndcToPerspectivePlane,
+  projectSourceToViewport,
+  viewportNormalizedToNdc,
+  type CoverTransform,
+} from './coverProjection'
