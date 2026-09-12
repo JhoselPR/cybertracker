@@ -3,7 +3,7 @@ import type { InteractionRuntime } from '../lib/interaction-bridge'
 import { GestureEngine } from '../lib/gestures'
 import { InteractionEngine } from '../lib/interaction'
 import { clearTrackingCanvas, drawTrackingFrame } from '../lib/rendering/drawHands'
-import type { SpatialHandPoseRuntime } from '../lib/spatial'
+import type { SpatialInteractionRuntime } from '../lib/spatial-interaction'
 import { createHandTracker, type HandTracker } from '../lib/vision/handTracker'
 import type { TrackerStatus, TrackingDebugSnapshot } from '../types/tracking'
 import { getErrorMessage, isCameraPermissionError } from '../utils/errors'
@@ -11,13 +11,13 @@ import { getErrorMessage, isCameraPermissionError } from '../utils/errors'
 const DEBUG_UPDATE_INTERVAL_MS = 250
 const FPS_SAMPLE_INTERVAL_MS = 500
 
-const EMPTY_DEBUG: TrackingDebugSnapshot = { fps: 0, hands: [], interaction: null }
+const EMPTY_DEBUG: TrackingDebugSnapshot = { fps: 0, hands: [], interaction: null, spatialInteraction: null }
 
 export function useHandTracking(
   videoRef: RefObject<HTMLVideoElement | null>,
   canvasRef: RefObject<HTMLCanvasElement | null>,
   runtime: InteractionRuntime,
-  spatialRuntime: SpatialHandPoseRuntime,
+  spatialRuntime: SpatialInteractionRuntime,
   debugEnabledRef: RefObject<boolean>,
 ) {
   const [attempt, setAttempt] = useState(0)
@@ -133,20 +133,25 @@ export function useHandTracking(
               const enrichedFrame = gestureEngine.processFrame(frame, {
                 aspectRatio: video.videoWidth / video.videoHeight,
               })
-              spatialRuntime.channel.publish(spatialRuntime.engine.processFrame(enrichedFrame, {
+              const projectionContext = {
                 sourceWidth: video.videoWidth,
                 sourceHeight: video.videoHeight,
                 viewportWidth: canvas.clientWidth,
                 viewportHeight: canvas.clientHeight,
                 mirrorX: true,
-              }))
-              const interactionFrame = interactionEngine.processFrame(enrichedFrame, {
-                sourceWidth: video.videoWidth,
-                sourceHeight: video.videoHeight,
-                viewportWidth: canvas.clientWidth,
-                viewportHeight: canvas.clientHeight,
-                mirrorX: true,
+              }
+              const interactionFrame = interactionEngine.processFrame(enrichedFrame, projectionContext)
+              const spatialInputs = spatialRuntime.poseEngine.processSemanticFrame(
+                enrichedFrame,
+                projectionContext,
+                interactionFrame.primaryTrackId,
+              )
+              const spatialInteraction = spatialRuntime.engine.processFrame({
+                interactionFrame,
+                ...spatialInputs,
+                viewport: { width: canvas.clientWidth, height: canvas.clientHeight },
               })
+              spatialRuntime.channel.publish(spatialInteraction)
               runtime.bridge.publishInteractionFrame(interactionFrame)
               if (debugEnabledRef.current) {
                 drawTrackingFrame(canvas, video, enrichedFrame, interactionFrame)
@@ -167,7 +172,7 @@ export function useHandTracking(
 
               if (debugEnabledRef.current && now - lastDebugUpdate >= DEBUG_UPDATE_INTERVAL_MS) {
                 // This low-frequency snapshot is diagnostics, not the authoritative event channel.
-                setDebug({ fps, hands: enrichedFrame.hands, interaction: interactionFrame })
+                setDebug({ fps, hands: enrichedFrame.hands, interaction: interactionFrame, spatialInteraction })
                 lastDebugUpdate = now
               }
             }

@@ -1,10 +1,10 @@
-import type { SpatialHandPose } from '../../types/spatial'
-import type { SpatialHandPoseChannel } from '../spatial'
+import type { HologramSemanticState } from '../../types/spatialInteraction'
+import type { HologramStateChannel } from '../spatial-interaction'
 
 export type PalmHologramStatus = 'initializing' | 'ready' | 'context-lost' | 'failed'
 
 export interface PalmHologramRenderPort {
-  setPose(pose: SpatialHandPose | null): void
+  setState(state: Readonly<HologramSemanticState>): void
   setDebug(enabled: boolean): void
   dispose(): void
 }
@@ -36,7 +36,7 @@ export interface PalmHologramConnection {
 /** Subscribes before loading Three so the renderer starts with the latest pose, including null. */
 export function connectPalmHologram(
   canvas: HTMLCanvasElement,
-  channel: SpatialHandPoseChannel,
+  channel: HologramStateChannel,
   initialDebug: boolean,
   loader: PalmHologramRendererLoader = loadRenderer,
   onStatus: (status: PalmHologramStatus) => void = () => undefined,
@@ -44,7 +44,7 @@ export function connectPalmHologram(
   const token = Symbol('palm-hologram-owner')
   let active = true
   let debug = initialDebug
-  let latestPose: SpatialHandPose | null = null
+  let latestState = channel.getSnapshot()
   let renderer: PalmHologramRenderPort | null = null
 
   const ownsCanvas = () => active && canvasOwners.get(canvas)?.token === token
@@ -62,10 +62,10 @@ export function connectPalmHologram(
 
   canvasOwners.get(canvas)?.revoke()
   canvasOwners.set(canvas, { token, revoke: dispose })
-  const unsubscribe = channel.subscribe((pose) => {
+  const unsubscribe = channel.subscribe((state) => {
     if (!ownsCanvas()) return
-    latestPose = pose
-    renderer?.setPose(pose)
+    latestState = state
+    renderer?.setState(state)
   })
 
   publishStatus('initializing')
@@ -78,7 +78,7 @@ export function connectPalmHologram(
     }
     renderer = loadedRenderer
     renderer.setDebug(debug)
-    renderer.setPose(latestPose)
+    renderer.setState(latestState)
   }).catch((error: unknown) => {
     if (!ownsCanvas()) return
     publishStatus('failed')

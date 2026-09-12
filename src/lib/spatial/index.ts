@@ -26,9 +26,13 @@ export function createSpatialHandPoseRuntime(): SpatialHandPoseRuntime {
 }
 
 export { SPATIAL_POSE_POLICY } from './config'
-export { extractSpatialHandPose, type SpatialProjectionContext } from './extractSpatialHandPose'
+export { extractSpatialHandMetric, extractSpatialHandPose, type SpatialProjectionContext } from './extractSpatialHandPose'
 export { SpatialHandPoseChannel, type SpatialPoseSubscriber } from './SpatialHandPoseChannel'
-export { SpatialHandPoseEngine, type SpatialHandPoseEngineOptions } from './SpatialHandPoseEngine'
+export {
+  SpatialHandPoseEngine,
+  type SpatialHandPoseEngineOptions,
+  type SpatialSemanticFrame,
+} from './SpatialHandPoseEngine'
 export { SpatialPoseFilter } from './SpatialPoseFilter'
 export { SpatialPresenceController, type SpatialRenderState } from './SpatialPresenceController'
 export * from './math'

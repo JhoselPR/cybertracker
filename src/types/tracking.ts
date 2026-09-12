@@ -23,6 +23,7 @@ export interface TrackingDebugSnapshot {
   hands: import('./gestures').EnrichedHand[]
   /** Throttled diagnostics only; synchronous InteractionFrame events are consumed on the render frame. */
   interaction: import('./interaction').InteractionFrame | null
+  spatialInteraction: import('./spatialInteraction').HologramSemanticState | null
 }
 
 export type TrackerStatus =

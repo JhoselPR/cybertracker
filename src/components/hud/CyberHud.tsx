@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useInteractionStore } from '../../hooks/useInteractionStore'
 import type { InteractionRuntime } from '../../lib/interaction-bridge'
+import type { HologramStateChannel } from '../../lib/spatial-interaction'
 import { attachPointerInput } from '../../lib/hud-interaction'
 import { HudButton } from './HudButton'
 import { HudPanel } from './HudPanel'
@@ -15,9 +16,10 @@ const PANEL_CONTENT: Record<string, readonly string[]> = {
 
 interface CyberHudProps {
   runtime: InteractionRuntime
+  spatialChannel: HologramStateChannel
 }
 
-export function CyberHud({ runtime }: CyberHudProps) {
+export function CyberHud({ runtime, spatialChannel }: CyberHudProps) {
   const snapshot = useInteractionStore(runtime)
   const rootRef = useRef<HTMLDivElement>(null)
 
@@ -108,7 +110,7 @@ export function CyberHud({ runtime }: CyberHudProps) {
         </HudPanel>
       ))}
 
-      <SpatialCursor runtime={runtime} />
+      <SpatialCursor runtime={runtime} spatialChannel={spatialChannel} />
     </div>
   )
 }

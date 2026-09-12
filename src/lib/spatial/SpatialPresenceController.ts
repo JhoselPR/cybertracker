@@ -1,8 +1,7 @@
-import type { SpatialHandPose } from '../../types/spatial'
 import { SPATIAL_POSE_POLICY } from './config'
 
-export interface SpatialRenderState {
-  pose: SpatialHandPose | null
+export interface SpatialRenderState<T> {
+  pose: T | null
   opacity: number
   scaleMultiplier: number
   visible: boolean
@@ -10,14 +9,18 @@ export interface SpatialRenderState {
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value))
 
-export class SpatialPresenceController {
-  private pose: SpatialHandPose | null = null
+export class SpatialPresenceController<T = import('../../types/spatial').SpatialHandPose> {
+  private pose: T | null = null
   private candidateSinceMs = 0
   private lostSinceMs: number | null = null
 
-  setTarget(pose: SpatialHandPose | null, nowMs: number): void {
+  constructor(private readonly identity: (target: T) => unknown = (target) => (
+    target as { trackId?: unknown }
+  ).trackId) {}
+
+  setTarget(pose: T | null, nowMs: number): void {
     if (pose) {
-      if (this.pose?.trackId !== pose.trackId) this.candidateSinceMs = nowMs
+      if (!this.pose || this.identity(this.pose) !== this.identity(pose)) this.candidateSinceMs = nowMs
       this.pose = pose
       this.lostSinceMs = null
     } else if (this.pose && this.lostSinceMs === null) {
@@ -25,7 +28,7 @@ export class SpatialPresenceController {
     }
   }
 
-  sample(nowMs: number): SpatialRenderState {
+  sample(nowMs: number): SpatialRenderState<T> {
     if (!this.pose) return { pose: null, opacity: 0, scaleMultiplier: 0.72, visible: false }
     const appearance = clamp01((nowMs - this.candidateSinceMs - SPATIAL_POSE_POLICY.appearanceDwellMs) / SPATIAL_POSE_POLICY.fadeMs)
     let opacity = appearance

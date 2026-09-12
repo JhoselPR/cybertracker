@@ -1,5 +1,6 @@
 import type { EnrichedHand } from '../../types/gestures'
 import type { SpatialBasis, SpatialHandPose, SpatialVector2, SpatialVector3 } from '../../types/spatial'
+import type { SpatialHandMetric } from '../../types/spatialInteraction'
 import type { NormalizedLandmark } from '../../types/tracking'
 import { projectSourceToViewport, viewportNormalizedToNdc } from '../coordinates'
 import { SPATIAL_POSE_POLICY } from './config'
@@ -57,6 +58,31 @@ function distanceOnViewport(a: SpatialVector2, b: SpatialVector2, context: Spati
     (b.x - a.x) * context.viewportWidth / shortest,
     (b.y - a.y) * context.viewportHeight / shortest,
   )
+}
+
+export function extractSpatialHandMetric(
+  hand: EnrichedHand,
+  context: SpatialProjectionContext,
+): SpatialHandMetric | null {
+  const wrist = hand.landmarks[PALM.wrist]
+  const index = hand.landmarks[PALM.index]
+  const middle = hand.landmarks[PALM.middle]
+  const pinky = hand.landmarks[PALM.pinky]
+  if (![wrist, index, middle, pinky].every(finiteLandmark)) return null
+  try {
+    const width = distanceOnViewport(projected(index, context), projected(pinky, context), context)
+    const length = distanceOnViewport(projected(wrist, context), projected(middle, context), context)
+    if (!Number.isFinite(width) || !Number.isFinite(length) || width < 1e-5 || length < 1e-5) return null
+    return {
+      trackId: hand.trackId,
+      apparentPalmScale: Math.max(
+        SPATIAL_POSE_POLICY.minimumScale,
+        Math.min(SPATIAL_POSE_POLICY.maximumScale, Math.sqrt(width * length)),
+      ),
+    }
+  } catch {
+    return null
+  }
 }
 
 function fallbackOrientation(

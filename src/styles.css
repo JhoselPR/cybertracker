@@ -324,11 +324,12 @@ button:focus-visible {
 .cursor-dot { position: absolute; top: 15px; left: 15px; width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
 .cursor-tick { position: absolute; top: 16px; left: 4px; width: 26px; height: 1px; background: currentColor; opacity: .45; }
 .cursor-tick-y { rotate: 90deg; }
-.spatial-cursor[data-state="pinching"] { color: #ffb94a; }
-.spatial-cursor[data-state="pinching"] .cursor-reticle { inset: 9px; }
-.spatial-cursor[data-state="dragging"] { color: #ed68b7; }
-.spatial-cursor[data-state="dragging"] .cursor-reticle { inset: 2px; }
-.spatial-cursor[data-state="stale"] { opacity: .38; }
+.spatial-cursor[data-state="spatial-hover"] { color: #ffb94a; }
+.spatial-cursor[data-state="spatial-hover"] .cursor-reticle { inset: 9px; }
+.spatial-cursor[data-state="spatial-grabbed"] { color: #ed68b7; }
+.spatial-cursor[data-state="spatial-grabbed"] .cursor-reticle { inset: 2px; }
+.spatial-cursor[data-quality="stale"],
+.spatial-cursor[data-quality="grace"] { opacity: .38; }
 .spatial-cursor[data-quality="grace"] .cursor-reticle { border-style: dashed; }
 
 .debug-panel {
@@ -367,6 +368,7 @@ button:focus-visible {
 .debug-gestures { margin-top: 3px; color: #a9dadd; }
 .debug-fingers { grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 4px; color: #81f9ff; }
 .debug-hand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.debug-hint { margin: 7px 0 0; color: #81f9ff; }
 .debug-history { display: grid; gap: 1px; max-height: 4.5em; margin-top: 5px; overflow: hidden; color: #a9dadd; }
 
 .status-overlay {

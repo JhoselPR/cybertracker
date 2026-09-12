@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { SpatialHandPose } from '../../../types/spatial'
-import { SpatialHandPoseChannel } from '../../spatial'
+import type { HologramSemanticState } from '../../../types/spatialInteraction'
+import { createInitialHologramState, HologramStateChannel } from '../../spatial-interaction'
 import {
   connectPalmHologram,
   type PalmHologramRenderPort,
@@ -9,22 +9,15 @@ import {
   type PalmHologramStatus,
 } from '../connectPalmHologram'
 
-const pose = (trackId: number): SpatialHandPose => ({
-  timestampMs: trackId,
-  trackId,
-  handedness: 'Right',
-  confidence: 0.9,
-  center: { x: 0.5, y: 0.5 },
-  anchor: { x: 0, y: 0, z: 0 },
-  scale: 0.2,
-  normal: { x: 0, y: 0, z: 1 },
-  basis: {
-    x: { x: 1, y: 0, z: 0 },
-    y: { x: 0, y: 1, z: 0 },
-    z: { x: 0, y: 0, z: 1 },
-  },
-  quaternion: { x: 0, y: 0, z: 0, w: 1 },
+const state = (trackId: number): HologramSemanticState => ({
+  ...createInitialHologramState(trackId),
+  anchorTrackId: trackId,
+  visible: true,
+  opacity: 1,
+  transform: { position: { x: 0, y: 0, z: 0 }, quaternion: { x: 0, y: 0, z: 0, w: 1 }, scale: 1 },
 })
+
+const channel = () => new HologramStateChannel(createInitialHologramState())
 
 function deferredLoader() {
   let resolvePromise!: (factory: PalmHologramRendererFactory) => void
@@ -33,28 +26,28 @@ function deferredLoader() {
 }
 
 const renderer = (): PalmHologramRenderPort => ({
-  setPose: vi.fn(),
+  setState: vi.fn(),
   setDebug: vi.fn(),
   dispose: vi.fn(),
 })
 
 describe('connectPalmHologram', () => {
-  it('subscribes before loading and applies only the latest pending pose when ready', async () => {
-    const channel = new SpatialHandPoseChannel()
+  it('subscribes before loading and gives the renderer only the latest final semantic state', async () => {
+    const states = channel()
     const pending = deferredLoader()
-    const connection = connectPalmHologram({} as HTMLCanvasElement, channel, false, pending.loader)
-    channel.publish(pose(1))
-    channel.publish(null)
-    channel.publish(pose(2))
+    const connection = connectPalmHologram({} as HTMLCanvasElement, states, false, pending.loader)
+    states.publish(state(1))
+    states.publish(createInitialHologramState())
+    states.publish(state(2))
     const loaded = renderer()
     pending.resolve(() => loaded)
     await Promise.resolve()
 
     expect(loaded.setDebug).toHaveBeenCalledWith(false)
-    expect(loaded.setPose).toHaveBeenCalledOnce()
-    expect(loaded.setPose).toHaveBeenCalledWith(expect.objectContaining({ trackId: 2 }))
-    channel.publish(null)
-    expect(loaded.setPose).toHaveBeenLastCalledWith(null)
+    expect(loaded.setState).toHaveBeenCalledOnce()
+    expect(loaded.setState).toHaveBeenCalledWith(expect.objectContaining({ anchorTrackId: 2 }))
+    states.publish(createInitialHologramState())
+    expect(loaded.setState).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }))
     connection.dispose()
   })
 
@@ -62,7 +55,7 @@ describe('connectPalmHologram', () => {
     const pending = deferredLoader()
     const connection = connectPalmHologram(
       {} as HTMLCanvasElement,
-      new SpatialHandPoseChannel(),
+      channel(),
       false,
       pending.loader,
     )
@@ -75,11 +68,11 @@ describe('connectPalmHologram', () => {
   })
 
   it('does not construct a renderer when the dynamic import resolves after cleanup', async () => {
-    const channel = new SpatialHandPoseChannel()
+    const states = channel()
     const pending = deferredLoader()
-    const connection = connectPalmHologram({} as HTMLCanvasElement, channel, false, pending.loader)
+    const connection = connectPalmHologram({} as HTMLCanvasElement, states, false, pending.loader)
     connection.dispose()
-    channel.publish(pose(3))
+    states.publish(state(3))
     const factory = vi.fn(() => renderer())
     pending.resolve(factory)
     await Promise.resolve()
@@ -88,16 +81,16 @@ describe('connectPalmHologram', () => {
 
   it('allows only the current setup on one canvas to become active', async () => {
     const canvas = {} as HTMLCanvasElement
-    const channel = new SpatialHandPoseChannel()
+    const states = channel()
     const stalePending = deferredLoader()
     const currentPending = deferredLoader()
     const staleFactory = vi.fn(() => renderer())
     const currentRenderer = renderer()
     const currentFactory = vi.fn(() => currentRenderer)
 
-    const stale = connectPalmHologram(canvas, channel, false, stalePending.loader)
+    const stale = connectPalmHologram(canvas, states, false, stalePending.loader)
     stale.dispose()
-    const current = connectPalmHologram(canvas, channel, false, currentPending.loader)
+    const current = connectPalmHologram(canvas, states, false, currentPending.loader)
     stalePending.resolve(staleFactory)
     currentPending.resolve(currentFactory)
     await Promise.resolve()
@@ -109,21 +102,21 @@ describe('connectPalmHologram', () => {
 
   it('prevents a superseded generation from mutating or disposing the current renderer', async () => {
     const canvas = {} as HTMLCanvasElement
-    const channel = new SpatialHandPoseChannel()
+    const states = channel()
     const firstPending = deferredLoader()
     const secondPending = deferredLoader()
-    const first = connectPalmHologram(canvas, channel, false, firstPending.loader)
+    const first = connectPalmHologram(canvas, states, false, firstPending.loader)
     const currentRenderer = renderer()
-    const current = connectPalmHologram(canvas, channel, false, secondPending.loader)
+    const current = connectPalmHologram(canvas, states, false, secondPending.loader)
     secondPending.resolve(() => currentRenderer)
     await Promise.resolve()
 
     first.setDebug(true)
     first.dispose()
-    channel.publish(pose(4))
+    states.publish(state(4))
 
     expect(currentRenderer.setDebug).toHaveBeenCalledTimes(1)
-    expect(currentRenderer.setPose).toHaveBeenLastCalledWith(expect.objectContaining({ trackId: 4 }))
+    expect(currentRenderer.setState).toHaveBeenLastCalledWith(expect.objectContaining({ anchorTrackId: 4 }))
     expect(currentRenderer.dispose).not.toHaveBeenCalled()
     current.dispose()
   })
@@ -133,7 +126,7 @@ describe('connectPalmHologram', () => {
     const loaded = renderer()
     const connection = connectPalmHologram(
       {} as HTMLCanvasElement,
-      new SpatialHandPoseChannel(),
+      channel(),
       false,
       pending.loader,
     )
@@ -150,7 +143,7 @@ describe('connectPalmHologram', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const connection = connectPalmHologram(
       {} as HTMLCanvasElement,
-      new SpatialHandPoseChannel(),
+      channel(),
       false,
       async () => { throw new Error('unavailable') },
       (status) => statuses.push(status),

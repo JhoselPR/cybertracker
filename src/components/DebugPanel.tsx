@@ -20,6 +20,9 @@ export function DebugPanel({ snapshot, semantics }: DebugPanelProps) {
   const pointer = interaction?.pointer
   const drag = interaction?.drag
   const lastEvent = interaction?.events.at(-1)
+  const spatial = snapshot.spatialInteraction
+  const spatialDebug = spatial?.debug
+  const spatialPosition = spatial?.transform?.position
 
   return (
     <aside className="debug-panel" aria-label="Hand tracking diagnostics">
@@ -71,7 +74,18 @@ export function DebugPanel({ snapshot, semantics }: DebugPanelProps) {
           <span>DRAG TARGET</span><span>{semantics.dragTargetId ?? '—'}</span>
           <span>END</span><span>{interaction?.terminationReason?.toUpperCase() ?? semantics.terminationReason?.toUpperCase() ?? '—'}</span>
           <span>TRANSITION</span><span>{interaction?.lastTransition?.toUpperCase() ?? semantics.lastTransition?.toUpperCase() ?? '—'}</span>
+          <span>SPATIAL TARGET</span><span>{spatialDebug?.targetId ?? '—'}</span>
+          <span>MODE</span><span>{spatial?.mode.toUpperCase() ?? 'PALM-ANCHORED'}</span>
+          <span>HOVER / GRAB</span><span>{spatial ? `${spatial.hovered} / ${spatial.grabbed}`.toUpperCase() : 'FALSE / FALSE'}</span>
+          <span>SPATIAL TRACK</span><span>{spatial?.interactionTrackId !== null && spatial?.interactionTrackId !== undefined ? `H${spatial.interactionTrackId}` : '—'}</span>
+          <span>RAY ORIGIN</span><span>{spatialDebug?.ray ? `${spatialDebug.ray.origin.x.toFixed(2)} ${spatialDebug.ray.origin.y.toFixed(2)} ${spatialDebug.ray.origin.z.toFixed(2)}` : '—'}</span>
+          <span>RAY DIRECTION</span><span>{spatialDebug?.ray ? `${spatialDebug.ray.direction.x.toFixed(2)} ${spatialDebug.ray.direction.y.toFixed(2)} ${spatialDebug.ray.direction.z.toFixed(2)}` : '—'}</span>
+          <span>OBJECT XYZ</span><span>{spatialPosition ? `${spatialPosition.x.toFixed(2)} ${spatialPosition.y.toFixed(2)} ${spatialPosition.z.toFixed(2)}` : '—'}</span>
+          <span>GRAB OFFSET</span><span>{spatialDebug?.grabOffset ? `${spatialDebug.grabOffset.x.toFixed(3)} ${spatialDebug.grabOffset.y.toFixed(3)}` : '—'}</span>
+          <span>DEPTH / DURATION</span><span>{spatialDebug ? `${spatialDebug.depthRatio.toFixed(2)} / ${Math.round(spatialDebug.grabDurationMs)}ms` : '—'}</span>
+          <span>SPATIAL EVENT</span><span>{spatialDebug?.lastEvent?.toUpperCase() ?? '—'}</span>
         </div>
+        <p className="debug-hint">Press R to reset the hologram to palm-anchored mode.</p>
         <div className="debug-history" aria-label="Recent interaction transitions">
           {semantics.history.map((entry) => (
             <span key={`${entry.timestampMs}:${entry.transition}:${entry.targetId ?? ''}`}>

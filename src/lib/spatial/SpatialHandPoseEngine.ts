@@ -1,11 +1,17 @@
 import type { EnrichedHand, EnrichedTrackingFrame } from '../../types/gestures'
 import type { SpatialHandPose } from '../../types/spatial'
+import type { SpatialHandMetric } from '../../types/spatialInteraction'
 import { SPATIAL_POSE_POLICY } from './config'
-import { extractSpatialHandPose, type SpatialProjectionContext } from './extractSpatialHandPose'
+import { extractSpatialHandMetric, extractSpatialHandPose, type SpatialProjectionContext } from './extractSpatialHandPose'
 import { SpatialPoseFilter } from './SpatialPoseFilter'
 
 export interface SpatialHandPoseEngineOptions {
   confidenceThreshold: number
+}
+
+export interface SpatialSemanticFrame {
+  anchorPose: SpatialHandPose | null
+  interactionMetric: SpatialHandMetric | null
 }
 
 export class SpatialHandPoseEngine {
@@ -39,6 +45,21 @@ export class SpatialHandPoseEngine {
     }
     this.current = this.filter.update(selected)
     return this.current
+  }
+
+  processSemanticFrame(
+    frame: EnrichedTrackingFrame,
+    context: SpatialProjectionContext,
+    preferredTrackId: number | null,
+  ): SpatialSemanticFrame {
+    const anchorPose = this.processFrame(frame, context)
+    const interactionHand = preferredTrackId === null
+      ? null
+      : frame.hands.find((hand) => hand.trackId === preferredTrackId) ?? null
+    return {
+      anchorPose,
+      interactionMetric: interactionHand ? extractSpatialHandMetric(interactionHand, context) : null,
+    }
   }
 
   reset(): void {

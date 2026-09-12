@@ -1,23 +1,25 @@
 import * as THREE from 'three'
-import type { SpatialHandPose } from '../../types/spatial'
-import { ndcToPerspectivePlane } from '../coordinates'
-import { SPATIAL_POSE_POLICY, SpatialPresenceController } from '../spatial'
+import type { HologramSemanticState } from '../../types/spatialInteraction'
+import { HOLOGRAM_CAMERA, PALM_HOLOGRAM_TARGET_ID } from '../spatial-interaction'
+import { SpatialPresenceController } from '../spatial'
 import type { PalmHologramStatus } from './connectPalmHologram'
 import { HologramFrameLoop } from './HologramFrameLoop'
-
-const CAMERA_Z = 5
-const CAMERA_FOV = 42
 
 export class PalmHologramRenderer {
   private readonly renderer: THREE.WebGLRenderer
   private readonly scene = new THREE.Scene()
-  private readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 20)
+  private readonly camera = new THREE.PerspectiveCamera(
+    HOLOGRAM_CAMERA.verticalFovDegrees,
+    1,
+    HOLOGRAM_CAMERA.near,
+    HOLOGRAM_CAMERA.far,
+  )
   private readonly root = new THREE.Group()
   private readonly core = new THREE.Group()
   private readonly rings = new THREE.Group()
   private readonly orbitals = new THREE.Group()
   private readonly debug = new THREE.Group()
-  private readonly presence = new SpatialPresenceController()
+  private readonly presence = new SpatialPresenceController<HologramSemanticState>(() => PALM_HOLOGRAM_TARGET_ID)
   private readonly geometries = new Set<THREE.BufferGeometry>()
   private readonly materials = new Set<THREE.Material>()
   private readonly baseOpacity = new Map<THREE.Material, number>()
@@ -35,7 +37,7 @@ export class PalmHologramRenderer {
     if (!context?.getContextAttributes()) throw new Error('WebGL2 is unavailable')
     this.renderer = new THREE.WebGLRenderer({ canvas, context, alpha: true, antialias: true, powerPreference: 'low-power' })
     this.renderer.setClearColor(0x000000, 0)
-    this.camera.position.z = CAMERA_Z
+    this.camera.position.set(HOLOGRAM_CAMERA.position.x, HOLOGRAM_CAMERA.position.y, HOLOGRAM_CAMERA.position.z)
     this.scene.add(this.root)
     this.root.add(this.core, this.rings, this.orbitals, this.debug)
     this.buildHologram()
@@ -52,8 +54,8 @@ export class PalmHologramRenderer {
     this.frameLoop.start()
   }
 
-  setPose(pose: SpatialHandPose | null): void {
-    this.presence.setTarget(pose, performance.now())
+  setState(state: Readonly<HologramSemanticState>): void {
+    this.presence.setTarget(state.visible && state.transform ? state as HologramSemanticState : null, performance.now())
   }
 
   setDebug(enabled: boolean): void {
@@ -105,24 +107,20 @@ export class PalmHologramRenderer {
       return
     }
 
-    const width = Math.max(1, this.canvas.clientWidth)
-    const height = Math.max(1, this.canvas.clientHeight)
-    const position = ndcToPerspectivePlane(state.pose.anchor, width, height, CAMERA_Z, CAMERA_FOV)
-    const visibleHeight = 2 * CAMERA_Z * Math.tan((CAMERA_FOV * Math.PI) / 360)
-    const worldScale = state.pose.scale * visibleHeight * state.scaleMultiplier
-    position.x += state.pose.normal.x * worldScale * SPATIAL_POSE_POLICY.hoverScaleRatio
-    position.y += state.pose.normal.y * worldScale * SPATIAL_POSE_POLICY.hoverScaleRatio
-    position.z += state.pose.normal.z * worldScale * SPATIAL_POSE_POLICY.hoverScaleRatio
-    this.root.position.set(position.x, position.y, position.z)
+    const semantic = state.pose
+    const transform = semantic.transform!
+    this.root.position.set(transform.position.x, transform.position.y, transform.position.z)
     this.root.quaternion.set(
-      state.pose.quaternion.x,
-      state.pose.quaternion.y,
-      state.pose.quaternion.z,
-      state.pose.quaternion.w,
+      transform.quaternion.x,
+      transform.quaternion.y,
+      transform.quaternion.z,
+      transform.quaternion.w,
     )
-    this.root.scale.setScalar(worldScale)
+    this.root.scale.setScalar(transform.scale * state.scaleMultiplier)
+    this.core.scale.setScalar(semantic.grabbed ? 0.9 : 1)
+    this.rings.scale.setScalar(semantic.grabbed ? 1.08 : semantic.hovered ? 1.035 : 1)
     this.debug.visible = this.debugEnabled
-    this.setOpacity(state.opacity)
+    this.setOpacity(state.opacity * semantic.opacity * (semantic.hovered ? 1.1 : 1))
 
     const seconds = nowMs / 1000
     this.core.rotation.set(seconds * 0.22, seconds * 0.34, seconds * 0.14)

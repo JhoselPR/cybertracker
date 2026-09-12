@@ -42,4 +42,15 @@ describe('SpatialHandPoseEngine', () => {
     hand.landmarks = []
     expect(engine.processFrame(spatialFrame(0, [hand]), projectionContext)).toBeNull()
   })
+
+  it('keeps the anchor open palm distinct from the primary interaction-hand metric', () => {
+    const engine = new SpatialHandPoseEngine()
+    const anchor = spatialHand(10, 0.98)
+    const primary = spatialHand(2, 0.9)
+    primary.rawGesture = { ...primary.rawGesture, gesture: 'pinch' }
+    primary.stableGesture = { ...primary.stableGesture, gesture: 'pinch' }
+    const semantic = engine.processSemanticFrame(spatialFrame(0, [anchor, primary]), projectionContext, 2)
+    expect(semantic.anchorPose?.trackId).toBe(10)
+    expect(semantic.interactionMetric?.trackId).toBe(2)
+  })
 })

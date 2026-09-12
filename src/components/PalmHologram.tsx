@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { SpatialHandPoseChannel } from '../lib/spatial'
+import type { HologramStateChannel } from '../lib/spatial-interaction'
 import {
   connectPalmHologram,
   type PalmHologramConnection,
@@ -7,7 +7,7 @@ import {
 } from '../lib/rendering/connectPalmHologram'
 
 interface PalmHologramProps {
-  channel: SpatialHandPoseChannel
+  channel: HologramStateChannel
   debug: boolean
   enabled: boolean
 }
