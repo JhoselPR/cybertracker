@@ -26,7 +26,7 @@ export function createSpatialHandPoseRuntime(): SpatialHandPoseRuntime {
 }
 
 export { SPATIAL_POSE_POLICY } from './config'
-export { extractSpatialHandMetric, extractSpatialHandPose, type SpatialProjectionContext } from './extractSpatialHandPose'
+export { extractDepthEvidence, extractSpatialHandPose, type SpatialProjectionContext } from './extractSpatialHandPose'
 export { SpatialHandPoseChannel, type SpatialPoseSubscriber } from './SpatialHandPoseChannel'
 export {
   SpatialHandPoseEngine,

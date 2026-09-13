@@ -150,6 +150,7 @@ export function useHandTracking(
                 interactionFrame,
                 ...spatialInputs,
                 viewport: { width: canvas.clientWidth, height: canvas.clientHeight },
+                debugEnabled: debugEnabledRef.current,
               })
               spatialRuntime.channel.publish(spatialInteraction)
               runtime.bridge.publishInteractionFrame(interactionFrame)

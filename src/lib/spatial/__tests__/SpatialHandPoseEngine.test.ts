@@ -51,6 +51,6 @@ describe('SpatialHandPoseEngine', () => {
     primary.stableGesture = { ...primary.stableGesture, gesture: 'pinch' }
     const semantic = engine.processSemanticFrame(spatialFrame(0, [anchor, primary]), projectionContext, 2)
     expect(semantic.anchorPose?.trackId).toBe(10)
-    expect(semantic.interactionMetric?.trackId).toBe(2)
+    expect(semantic.depthEvidence?.trackId).toBe(2)
   })
 })

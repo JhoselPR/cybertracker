@@ -71,7 +71,11 @@ export function App() {
       <CyberHud runtime={runtime} spatialChannel={spatialRuntime.channel} />
 
       {status.kind === 'ready' && snapshot.debug ? (
-        <DebugPanel snapshot={debug} semantics={snapshot} />
+        <DebugPanel
+          snapshot={debug}
+          semantics={snapshot}
+          getDepthTraceJSON={spatialRuntime.exportDepthTraceJSON}
+        />
       ) : status.kind !== 'ready' ? (
         <StatusOverlay status={status} onRetry={retry} />
       ) : null}

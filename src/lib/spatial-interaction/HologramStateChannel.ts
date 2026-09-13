@@ -41,7 +41,13 @@ export class HologramStateChannel {
       opacity: 0,
       cursorState: 'normal',
       events: [],
-      debug: { targetId: null, ray: null, grabOffset: null, depthRatio: 1, grabDurationMs: 0, lastEvent: null },
+      debug: {
+        targetId: null, ray: null, grabOffset: null, depthRatio: 1, grabDurationMs: 0, lastEvent: null,
+        depth: {
+          timestampMs: this.latest.timestampMs, rawPalmScale: 1, baselinePalmScale: 1, scaleRatio: 1,
+          filteredScaleRatio: 1, relativeDepth: 1, velocity: 0, trackingValid: false,
+        },
+      },
     })
     this.subscribers.clear()
   }

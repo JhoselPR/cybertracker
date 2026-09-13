@@ -1,8 +1,8 @@
 import type { EnrichedHand, EnrichedTrackingFrame } from '../../types/gestures'
 import type { SpatialHandPose } from '../../types/spatial'
-import type { SpatialHandMetric } from '../../types/spatialInteraction'
+import type { DepthEvidence } from '../spatial-interaction/depth'
 import { SPATIAL_POSE_POLICY } from './config'
-import { extractSpatialHandMetric, extractSpatialHandPose, type SpatialProjectionContext } from './extractSpatialHandPose'
+import { extractDepthEvidence, extractSpatialHandPose, type SpatialProjectionContext } from './extractSpatialHandPose'
 import { SpatialPoseFilter } from './SpatialPoseFilter'
 
 export interface SpatialHandPoseEngineOptions {
@@ -11,7 +11,7 @@ export interface SpatialHandPoseEngineOptions {
 
 export interface SpatialSemanticFrame {
   anchorPose: SpatialHandPose | null
-  interactionMetric: SpatialHandMetric | null
+  depthEvidence: DepthEvidence | null
 }
 
 export class SpatialHandPoseEngine {
@@ -58,7 +58,7 @@ export class SpatialHandPoseEngine {
       : frame.hands.find((hand) => hand.trackId === preferredTrackId) ?? null
     return {
       anchorPose,
-      interactionMetric: interactionHand ? extractSpatialHandMetric(interactionHand, context) : null,
+      depthEvidence: interactionHand ? extractDepthEvidence(interactionHand, frame.timestampMs, context) : null,
     }
   }
 

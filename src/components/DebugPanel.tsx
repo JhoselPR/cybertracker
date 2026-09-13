@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { FingerName } from '../types/gestures'
 import type { TrackingDebugSnapshot } from '../types/tracking'
 import type { UiSemanticSnapshot } from '../lib/interaction-bridge'
@@ -13,9 +14,11 @@ const FINGER_LABELS: Array<[FingerName, string]> = [
 interface DebugPanelProps {
   snapshot: TrackingDebugSnapshot
   semantics: UiSemanticSnapshot
+  getDepthTraceJSON: () => string | null
 }
 
-export function DebugPanel({ snapshot, semantics }: DebugPanelProps) {
+export function DebugPanel({ snapshot, semantics, getDepthTraceJSON }: DebugPanelProps) {
+  const [copyStatus, setCopyStatus] = useState('')
   const interaction = snapshot.interaction
   const pointer = interaction?.pointer
   const drag = interaction?.drag
@@ -23,6 +26,18 @@ export function DebugPanel({ snapshot, semantics }: DebugPanelProps) {
   const spatial = snapshot.spatialInteraction
   const spatialDebug = spatial?.debug
   const spatialPosition = spatial?.transform?.position
+  const depth = spatialDebug?.depth
+
+  const copyDepthTrace = async () => {
+    try {
+      const trace = getDepthTraceJSON()
+      if (!trace) throw new Error('Depth trace is unavailable')
+      await navigator.clipboard.writeText(trace)
+      setCopyStatus('Depth trace copied')
+    } catch {
+      setCopyStatus('Could not copy depth trace')
+    }
+  }
 
   return (
     <aside className="debug-panel" aria-label="Hand tracking diagnostics">
@@ -84,6 +99,24 @@ export function DebugPanel({ snapshot, semantics }: DebugPanelProps) {
           <span>GRAB OFFSET</span><span>{spatialDebug?.grabOffset ? `${spatialDebug.grabOffset.x.toFixed(3)} ${spatialDebug.grabOffset.y.toFixed(3)}` : '—'}</span>
           <span>DEPTH / DURATION</span><span>{spatialDebug ? `${spatialDebug.depthRatio.toFixed(2)} / ${Math.round(spatialDebug.grabDurationMs)}ms` : '—'}</span>
           <span>SPATIAL EVENT</span><span>{spatialDebug?.lastEvent?.toUpperCase() ?? '—'}</span>
+        </div>
+        <div className="debug-depth">
+          <div className="debug-section-heading">DEPTH</div>
+          <div className="debug-interaction-grid">
+            <span>TRACKING</span><span>{depth?.trackingValid ? 'VALID' : 'HELD'}</span>
+            <span>TIMESTAMP</span><span>{depth?.timestampMs.toFixed(0) ?? '—'}</span>
+            <span>RAW / BASELINE SCALE</span><span>{depth ? `${depth.rawPalmScale.toFixed(3)} / ${depth.baselinePalmScale.toFixed(3)}` : '—'}</span>
+            <span>RAW / FILTERED RATIO</span><span>{depth ? `${depth.scaleRatio.toFixed(3)} / ${depth.filteredScaleRatio.toFixed(3)}` : '—'}</span>
+            <span>RELATIVE DEPTH</span><span>{depth?.relativeDepth.toFixed(3) ?? '—'}</span>
+            <span>WORLD Z</span><span>{spatialPosition?.z.toFixed(3) ?? '—'}</span>
+            <span>VELOCITY</span><span>{depth?.velocity.toFixed(3) ?? '—'}</span>
+          </div>
+          {import.meta.env.DEV ? (
+            <div className="debug-depth-actions">
+              <button type="button" onClick={() => void copyDepthTrace()}>COPY DEPTH TRACE</button>
+              <span className="debug-copy-status" role="status" aria-live="polite">{copyStatus}</span>
+            </div>
+          ) : null}
         </div>
         <p className="debug-hint">Press R to reset the hologram to palm-anchored mode.</p>
         <div className="debug-history" aria-label="Recent interaction transitions">

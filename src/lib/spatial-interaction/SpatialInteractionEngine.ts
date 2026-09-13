@@ -11,10 +11,10 @@ import { SPATIAL_POSE_POLICY } from '../spatial'
 import { HOLOGRAM_CAMERA, PALM_HOLOGRAM_TARGET_ID, SPATIAL_INTERACTION_POLICY } from './camera'
 import { normalizedPointerToNdc, perspectiveCameraRay, unprojectNdcAtDepth, worldPointToNdc } from './rayMath'
 import { SpatialTargetRegistry } from './SpatialTargetRegistry'
+import { DEPTH_CONFIG, DepthEstimator, type DepthEstimate } from './depth'
 
 interface GrabCapture {
   trackId: number
-  initialPalmScale: number
   initialDistance: number
   offsetNdc: SpatialVector2
   quaternion: SpatialTransform['quaternion']
@@ -29,6 +29,10 @@ const copyTransform = (transform: SpatialTransform): SpatialTransform => ({
 })
 
 export function createInitialHologramState(timestampMs = 0): HologramSemanticState {
+  const depth: DepthEstimate = {
+    timestampMs, rawPalmScale: 1, baselinePalmScale: 1, scaleRatio: 1, filteredScaleRatio: 1,
+    relativeDepth: 1, velocity: 0, trackingValid: false,
+  }
   return {
     targetId: PALM_HOLOGRAM_TARGET_ID,
     timestampMs,
@@ -43,7 +47,7 @@ export function createInitialHologramState(timestampMs = 0): HologramSemanticSta
     opacity: 1,
     cursorState: 'normal',
     events: [],
-    debug: { targetId: null, ray: null, grabOffset: null, depthRatio: 1, grabDurationMs: 0, lastEvent: null },
+    debug: { targetId: null, ray: null, grabOffset: null, depthRatio: 1, grabDurationMs: 0, lastEvent: null, depth },
   }
 }
 
@@ -52,9 +56,11 @@ export class SpatialInteractionEngine {
   private state = createInitialHologramState()
   private hoveredId: string | null = null
   private capture: GrabCapture | null = null
+  private readonly depthEstimator: DepthEstimator
 
-  constructor(registry = new SpatialTargetRegistry()) {
+  constructor(registry = new SpatialTargetRegistry(), depthEstimator = new DepthEstimator({ debugEnabled: import.meta.env.DEV })) {
     this.registry = registry
+    this.depthEstimator = depthEstimator
     this.registry.register({
       id: PALM_HOLOGRAM_TARGET_ID,
       enabled: false,
@@ -65,7 +71,8 @@ export class SpatialInteractionEngine {
   }
 
   processFrame(inputs: SpatialInteractionInputs): HologramSemanticState {
-    const { interactionFrame, anchorPose, interactionMetric, viewport } = inputs
+    const { interactionFrame, anchorPose, depthEvidence, viewport, debugEnabled } = inputs
+    this.depthEstimator.setDebugEnabled(debugEnabled)
     const events: SpatialInteractionEvent[] = []
     let transform = this.state.transform ? copyTransform(this.state.transform) : null
     let mode = this.state.mode
@@ -81,32 +88,38 @@ export class SpatialInteractionEngine {
     if (mode !== 'grabbed') this.updateHover(ray, transform, interactionFrame, events)
 
     const pinchStart = interactionFrame.events.find((event) => event.type === 'pinchstart')
+    if (mode !== 'grabbed' && !pinchStart) this.depthEstimator.observe(depthEvidence, interactionFrame.timestampMs)
     if (this.hoveredId && transform && pinchStart && interactionFrame.primaryTrackId !== null
-      && interactionMetric?.trackId === interactionFrame.primaryTrackId
-      && interactionMetric.apparentPalmScale > 0) {
+      && depthEvidence?.trackId === interactionFrame.primaryTrackId) {
       const pointerNdc = normalizedPointerToNdc(pinchStart.position)
       const objectNdc = worldPointToNdc(transform.position, viewport, HOLOGRAM_CAMERA.position, HOLOGRAM_CAMERA.verticalFovDegrees)
       this.capture = {
         trackId: interactionFrame.primaryTrackId,
-        initialPalmScale: interactionMetric.apparentPalmScale,
         initialDistance: HOLOGRAM_CAMERA.position.z - transform.position.z,
         offsetNdc: { x: objectNdc.x - pointerNdc.x, y: objectNdc.y - pointerNdc.y },
         quaternion: { ...transform.quaternion },
         scale: transform.scale,
         startedAtMs: interactionFrame.timestampMs,
       }
+      this.depthEstimator.beginGrab(depthEvidence.trackId, interactionFrame.timestampMs, depthEvidence.projectionId)
       mode = 'grabbed'
       events.push(this.event('grabstart', transform, interactionFrame, ray))
     }
 
     if (mode === 'grabbed' && this.capture && transform) {
+      if (!pinchStart) this.depthEstimator.observe(pointer?.stale ? null : depthEvidence, interactionFrame.timestampMs)
       const move = interactionFrame.events.find((event) => event.type === 'pinchmove' || event.type === 'dragmove')
-      if (move && interactionMetric?.trackId === this.capture.trackId && !pointer?.stale) {
-        const rawRatio = interactionMetric.apparentPalmScale / this.capture.initialPalmScale
+      if (move && depthEvidence?.trackId === this.capture.trackId && !pointer?.stale) {
+        const estimate = this.depthEstimator.current()
         const depthRatio = Math.max(SPATIAL_INTERACTION_POLICY.minimumDepthRatio,
-          Math.min(SPATIAL_INTERACTION_POLICY.maximumDepthRatio, rawRatio))
-        const distance = Math.max(SPATIAL_INTERACTION_POLICY.minimumCameraDistance,
+          Math.min(SPATIAL_INTERACTION_POLICY.maximumDepthRatio, estimate.relativeDepth))
+        const requestedDistance = Math.max(SPATIAL_INTERACTION_POLICY.minimumCameraDistance,
           Math.min(SPATIAL_INTERACTION_POLICY.maximumCameraDistance, this.capture.initialDistance / depthRatio))
+        const currentDistance = HOLOGRAM_CAMERA.position.z - transform.position.z
+        const dt = Math.max(0, (interactionFrame.timestampMs - this.state.timestampMs) / 1000)
+        const maximumDistanceStep = DEPTH_CONFIG.maximumWorldZVelocity * dt
+        const distance = !estimate.trackingValid ? currentDistance : currentDistance
+          + Math.max(-maximumDistanceStep, Math.min(maximumDistanceStep, requestedDistance - currentDistance))
         const pointerNdc = normalizedPointerToNdc(move.position)
         const centerNdc = { x: pointerNdc.x + this.capture.offsetNdc.x, y: pointerNdc.y + this.capture.offsetNdc.y }
         transform = {
@@ -118,6 +131,8 @@ export class SpatialInteractionEngine {
         events.push({ ...this.event('grabmove', transform, interactionFrame, ray), type: 'grabmove', depthRatio })
       }
 
+      this.depthEstimator.recordWorldZ(interactionFrame.timestampMs, transform.position.z)
+
       const terminal = interactionFrame.events.find((event) => (
         event.type === 'pinchend' || event.type === 'dragend'
       ))
@@ -128,6 +143,7 @@ export class SpatialInteractionEngine {
           : { ...this.event('grabcancel', transform, interactionFrame, ray), type: 'grabcancel', reason })
         mode = 'free'
         this.capture = null
+        this.depthEstimator.endGrab()
         this.updateHover(reason === 'released' ? ray : null, transform, interactionFrame, events)
       }
     }
@@ -135,6 +151,7 @@ export class SpatialInteractionEngine {
     const grabbed = mode === 'grabbed'
     const hovered = !grabbed && this.hoveredId === PALM_HOLOGRAM_TARGET_ID
     const lastEvent = events.at(-1)?.type ?? this.state.debug.lastEvent
+    const depthEstimate = this.depthEstimator.current()
     const depthRatio = events.find((event) => event.type === 'grabmove')?.depthRatio ?? (grabbed ? this.state.debug.depthRatio : 1)
     this.state = {
       targetId: PALM_HOLOGRAM_TARGET_ID,
@@ -157,6 +174,7 @@ export class SpatialInteractionEngine {
         depthRatio,
         grabDurationMs: this.capture ? interactionFrame.timestampMs - this.capture.startedAtMs : 0,
         lastEvent,
+        depth: depthEstimate,
       },
     }
     return structuredClone(this.state)
@@ -165,6 +183,7 @@ export class SpatialInteractionEngine {
   reset(timestampMs = 0): HologramSemanticState {
     this.capture = null
     this.hoveredId = null
+    this.depthEstimator.reset()
     this.state = createInitialHologramState(timestampMs)
     this.registry.update(PALM_HOLOGRAM_TARGET_ID, { enabled: false })
     return structuredClone(this.state)
@@ -174,6 +193,11 @@ export class SpatialInteractionEngine {
     this.registry.dispose()
     this.capture = null
     this.hoveredId = null
+    this.depthEstimator.reset()
+  }
+
+  exportDepthTraceJSON(): string | null {
+    return this.depthEstimator.exportTraceJSON()
   }
 
   private anchoredTransform(pose: SpatialHandPose, viewport: { width: number; height: number }): SpatialTransform {

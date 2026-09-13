@@ -1,5 +1,6 @@
 import type { Position2D, InteractionEndReason, InteractionFrame } from './interaction'
 import type { SpatialHandPose, SpatialQuaternion, SpatialVector2, SpatialVector3 } from './spatial'
+import type { DepthEstimate, DepthEvidence } from '../lib/spatial-interaction/depth/types'
 
 export type HologramOwnershipMode = 'palm-anchored' | 'grabbed' | 'free'
 export type SpatialInteractionState = 'idle' | 'hovering' | 'grabbed'
@@ -16,16 +17,12 @@ export interface SpatialTransform {
   scale: number
 }
 
-export interface SpatialHandMetric {
-  trackId: number
-  apparentPalmScale: number
-}
-
 export interface SpatialInteractionInputs {
   interactionFrame: InteractionFrame
   anchorPose: SpatialHandPose | null
-  interactionMetric: SpatialHandMetric | null
+  depthEvidence: DepthEvidence | null
   viewport: { width: number; height: number }
+  debugEnabled: boolean
 }
 
 interface SpatialEventBase {
@@ -49,6 +46,7 @@ export interface SpatialInteractionDebug {
   depthRatio: number
   grabDurationMs: number
   lastEvent: SpatialInteractionEvent['type'] | null
+  depth: DepthEstimate
 }
 
 export interface HologramSemanticState {

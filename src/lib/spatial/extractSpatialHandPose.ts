@@ -1,6 +1,6 @@
 import type { EnrichedHand } from '../../types/gestures'
 import type { SpatialBasis, SpatialHandPose, SpatialVector2, SpatialVector3 } from '../../types/spatial'
-import type { SpatialHandMetric } from '../../types/spatialInteraction'
+import type { DepthDistances, DepthEvidence } from '../spatial-interaction/depth'
 import type { NormalizedLandmark } from '../../types/tracking'
 import { projectSourceToViewport, viewportNormalizedToNdc } from '../coordinates'
 import { SPATIAL_POSE_POLICY } from './config'
@@ -15,6 +15,10 @@ export interface SpatialProjectionContext {
 }
 
 const PALM = Object.freeze({ wrist: 0, index: 5, middle: 9, ring: 13, pinky: 17 })
+
+function finiteProjectedLandmark(value: NormalizedLandmark | undefined): value is NormalizedLandmark {
+  return Boolean(value && Number.isFinite(value.x) && Number.isFinite(value.y))
+}
 
 function finiteLandmark(value: NormalizedLandmark | undefined): value is NormalizedLandmark {
   return Boolean(value && Number.isFinite(value.x) && Number.isFinite(value.y) && Number.isFinite(value.z))
@@ -60,25 +64,63 @@ function distanceOnViewport(a: SpatialVector2, b: SpatialVector2, context: Spati
   )
 }
 
-export function extractSpatialHandMetric(
+export function extractDepthEvidence(
   hand: EnrichedHand,
+  timestampMs: number,
   context: SpatialProjectionContext,
-): SpatialHandMetric | null {
+): DepthEvidence | null {
+  if (!Number.isFinite(hand.trackId) || hand.trackId < 0 || !Number.isFinite(timestampMs)) return null
   const wrist = hand.landmarks[PALM.wrist]
   const index = hand.landmarks[PALM.index]
   const middle = hand.landmarks[PALM.middle]
+  const ring = hand.landmarks[PALM.ring]
   const pinky = hand.landmarks[PALM.pinky]
-  if (![wrist, index, middle, pinky].every(finiteLandmark)) return null
+  const landmarks = [wrist, index, middle, ring, pinky] as const
   try {
-    const width = distanceOnViewport(projected(index, context), projected(pinky, context), context)
-    const length = distanceOnViewport(projected(wrist, context), projected(middle, context), context)
-    if (!Number.isFinite(width) || !Number.isFinite(length) || width < 1e-5 || length < 1e-5) return null
+    const projectedPoints = landmarks.map((landmark) => landmark && finiteProjectedLandmark(landmark) ? projected(landmark, context) : null)
+    const pairs = [[0, 2], [1, 4]] as const
+    const distanceIndices = [1, 7] as const
+    const distances = new Array<number>(8).fill(0)
+    let validMask = 0
+    for (let i = 0; i < pairs.length; i += 1) {
+      const [a, b] = pairs[i]
+      const first = projectedPoints[a]
+      const second = projectedPoints[b]
+      if (!first || !second) continue
+      const distance = distanceOnViewport(first, second, context)
+      if (!Number.isFinite(distance) || distance < 1e-5) continue
+      const distanceIndex = distanceIndices[i]
+      distances[distanceIndex] = distance
+      validMask |= 1 << distanceIndex
+    }
+    const zScratch = new Array<number>(5)
+    let zCount = 0
+    let visibilitySum = 0
+    let visibilityCount = 0
+    let hasPositiveVisibility = false
+    const shortest = Math.min(context.viewportWidth, context.viewportHeight)
+    for (let i = 0; i < 5; i += 1) {
+      const landmark = landmarks[i]
+      if (!landmark || !finiteLandmark(landmark)) continue
+      zScratch[zCount++] = landmark.z * context.sourceWidth / shortest
+      if (Number.isFinite(landmark.visibility)) {
+        visibilitySum += Math.max(0, Math.min(1, landmark.visibility!))
+        visibilityCount += 1
+        hasPositiveVisibility ||= landmark.visibility! > 0
+      }
+    }
+    zScratch.length = zCount
+    zScratch.sort((a, b) => a - b)
+    const palmZ = zCount >= 3 ? zScratch[zCount >> 1] : null
     return {
       trackId: hand.trackId,
-      apparentPalmScale: Math.max(
-        SPATIAL_POSE_POLICY.minimumScale,
-        Math.min(SPATIAL_POSE_POLICY.maximumScale, Math.sqrt(width * length)),
-      ),
+      timestampMs,
+      projectionId: (((context.sourceWidth * 31 + context.sourceHeight) * 31 + context.viewportWidth) * 31
+        + context.viewportHeight) * 2 + Number(context.mirrorX),
+      distances: distances as unknown as DepthDistances,
+      validMask,
+      palmZ,
+      visibility: visibilityCount && hasPositiveVisibility ? visibilitySum / visibilityCount : null,
     }
   } catch {
     return null

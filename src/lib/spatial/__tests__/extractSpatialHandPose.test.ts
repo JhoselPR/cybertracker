@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractSpatialHandPose } from '../extractSpatialHandPose'
+import { extractDepthEvidence, extractSpatialHandPose } from '../extractSpatialHandPose'
 import { dot3 } from '../math'
 import { projectionContext, spatialHand } from './fixtures'
 
@@ -63,5 +63,61 @@ describe('extractSpatialHandPose', () => {
     const expired = extractSpatialHandPose(degenerate, 100, projectionContext, valid)
     expect(brief?.quaternion).toEqual(valid.quaternion)
     expect(expired).toBeNull()
+  })
+})
+
+describe('extractDepthEvidence', () => {
+  it('extracts only projected XY distances 0-9 and 5-17 as control evidence', () => {
+    const hand = spatialHand(4)
+    hand.landmarks[0].z = -0.1
+    hand.landmarks[5].z = 0.3
+    hand.landmarks[9].z = 0.1
+    hand.landmarks[13].z = 0.2
+    hand.landmarks[17].z = 0
+    const result = extractDepthEvidence(hand, 123, projectionContext)!
+    expect(result.trackId).toBe(4)
+    expect(result.timestampMs).toBe(123)
+    expect(result.distances).toHaveLength(8)
+    expect(result.validMask).toBe((1 << 1) | (1 << 7))
+    expect(result.distances.every(Number.isFinite)).toBe(true)
+    expect(result.distances.filter((distance) => distance > 0)).toHaveLength(2)
+    expect(result.palmZ).toBeCloseTo(0.1)
+    expect(result.visibility).toBeNull()
+  })
+
+  it('does not require unrelated palm landmarks for apparent-scale evidence', () => {
+    const hand = spatialHand()
+    hand.landmarks[13] = { x: Number.NaN, y: 0, z: 0 }
+    const result = extractDepthEvidence(hand, 10, projectionContext)!
+    expect(result.validMask).toBe((1 << 1) | (1 << 7))
+    expect(result.distances.every(Number.isFinite)).toBe(true)
+    expect(result.palmZ).not.toBeNull()
+  })
+
+  it('does not require MediaPipe Z for projected apparent-scale evidence', () => {
+    const hand = spatialHand()
+    for (const index of [0, 5, 9, 17]) hand.landmarks[index] = { ...hand.landmarks[index], z: Number.NaN }
+    const result = extractDepthEvidence(hand, 10, projectionContext)!
+    expect(result.validMask).toBe((1 << 1) | (1 << 7))
+    expect(result.palmZ).toBeNull()
+  })
+
+  it('normalizes all-zero MediaPipe visibility placeholders to absent evidence', () => {
+    const hand = spatialHand()
+    hand.landmarks = hand.landmarks.map((landmark) => ({ ...landmark, visibility: 0 }))
+    expect(extractDepthEvidence(hand, 10, projectionContext)?.visibility).toBeNull()
+  })
+
+  it('preserves finite visibility semantics when MediaPipe supplies positive values', () => {
+    const hand = spatialHand()
+    for (const index of [0, 5, 9, 13, 17]) hand.landmarks[index] = { ...hand.landmarks[index], visibility: 0.8 }
+    expect(extractDepthEvidence(hand, 10, projectionContext)?.visibility).toBeCloseTo(0.8)
+  })
+
+  it('changes raw projected segment distances when the hand geometry scales', () => {
+    const normal = extractDepthEvidence(spatialHand(), 10, projectionContext)!
+    const larger = extractDepthEvidence(spatialHand(1, 0.9, 'Right', { scale: 1.2 }), 20, projectionContext)!
+    expect(larger.distances[1]).toBeGreaterThan(normal.distances[1])
+    expect(larger.distances[7]).toBeGreaterThan(normal.distances[7])
   })
 })

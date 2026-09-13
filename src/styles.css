@@ -359,7 +359,8 @@ button:focus-visible {
 .debug-fingers { display: grid; align-items: center; }
 .debug-summary { grid-template-columns: 1fr auto; color: #81f9ff; }
 .debug-hand,
-.debug-interaction { margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(217, 251, 255, .14); }
+.debug-interaction,
+.debug-depth { margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(217, 251, 255, .14); }
 .debug-section-heading { margin-bottom: 3px; color: #81f9ff; }
 .debug-interaction-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; color: #a9dadd; }
 .debug-interaction-grid span:nth-child(even) { overflow: hidden; color: #d9fbff; text-align: end; text-overflow: ellipsis; white-space: nowrap; }
@@ -370,6 +371,23 @@ button:focus-visible {
 .debug-hand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .debug-hint { margin: 7px 0 0; color: #81f9ff; }
 .debug-history { display: grid; gap: 1px; max-height: 4.5em; margin-top: 5px; overflow: hidden; color: #a9dadd; }
+.debug-depth-warning { margin-top: 5px; color: #ffb94a; font-weight: 700; }
+.debug-depth-actions { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 6px; }
+.debug-depth-actions button {
+  min-height: 26px;
+  border: 1px solid rgba(129, 249, 255, .52);
+  border-radius: 6px;
+  padding: 3px 7px;
+  color: #d9fbff;
+  background: rgba(17, 65, 69, .72);
+  font: inherit;
+  letter-spacing: .04em;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.debug-depth-actions button:hover { background: rgba(25, 91, 96, .82); }
+.debug-depth-actions button:focus-visible { outline: 2px solid #ffb94a; outline-offset: 2px; }
+.debug-copy-status { min-height: 1.45em; color: #a9dadd; text-align: end; }
 
 .status-overlay {
   position: absolute;
@@ -406,7 +424,7 @@ button:focus-visible {
   .hud-control-vision { top: 12%; right: max(18px, env(safe-area-inset-right)); }
   .hud-control-hardware { bottom: 17%; left: max(18px, env(safe-area-inset-left)); }
   .hud-control-network { right: max(18px, env(safe-area-inset-right)); bottom: 17%; }
-  .debug-panel { top: 160px; max-height: 40vh; overflow: hidden; translate: none; }
+  .debug-panel { top: 160px; max-height: 40vh; overflow: auto; translate: none; }
 }
 
 @media (orientation: landscape) and (max-height: 520px) {
@@ -415,7 +433,7 @@ button:focus-visible {
   .hud-control-vision { top: max(52px, 14vh); right: max(18px, 5vw); }
   .hud-control-hardware { bottom: max(58px, 14vh); left: max(18px, 7vw); }
   .hud-control-network { right: max(18px, 7vw); bottom: max(58px, 14vh); }
-  .debug-panel { top: 58px; left: 55%; width: min(240px, 32vw); max-height: 44vh; overflow: hidden; translate: -50% 0; }
+  .debug-panel { top: 58px; left: 55%; width: min(240px, 32vw); max-height: 44vh; overflow: auto; translate: -50% 0; }
   .hud-panel { width: min(310px, calc(100vw - 20px)); }
   .hud-panel-content { padding-block: 10px; }
 }

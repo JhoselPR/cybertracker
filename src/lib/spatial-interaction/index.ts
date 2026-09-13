@@ -8,6 +8,7 @@ export interface SpatialInteractionRuntime {
   poseEngine: SpatialHandPoseEngine
   reset(timestampMs?: number): void
   dispose(): void
+  exportDepthTraceJSON(): string | null
 }
 
 export function createSpatialInteractionRuntime(): SpatialInteractionRuntime {
@@ -27,6 +28,7 @@ export function createSpatialInteractionRuntime(): SpatialInteractionRuntime {
       engine.dispose()
       channel.dispose()
     },
+    exportDepthTraceJSON: () => engine.exportDepthTraceJSON(),
   }
 }
 
@@ -35,3 +37,4 @@ export * from './HologramStateChannel'
 export * from './rayMath'
 export * from './SpatialInteractionEngine'
 export * from './SpatialTargetRegistry'
+export * from './depth'
