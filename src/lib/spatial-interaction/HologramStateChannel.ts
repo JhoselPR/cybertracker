@@ -1,4 +1,5 @@
 import type { HologramSemanticState } from '../../types/spatialInteraction'
+import { emptyRotationDebug } from './rotation'
 
 export type HologramStateSubscriber = (state: Readonly<HologramSemanticState>) => void
 
@@ -43,6 +44,7 @@ export class HologramStateChannel {
       events: [],
       debug: {
         targetId: null, ray: null, grabOffset: null, depthRatio: 1, grabDurationMs: 0, lastEvent: null,
+        rotation: emptyRotationDebug(),
         depth: {
           timestampMs: this.latest.timestampMs, rawPalmScale: 1, baselinePalmScale: 1, scaleRatio: 1,
           filteredScaleRatio: 1, relativeDepth: 1, velocity: 0, trackingValid: false,

@@ -11,8 +11,6 @@ export const SPATIAL_INTERACTION_POLICY = Object.freeze({
   targetRadiusScale: 0.82,
   targetExitRadiusScale: 1.15,
   minimumTargetRadius: 0.12,
-  minimumDepthRatio: 0.68,
-  maximumDepthRatio: 1.42,
   minimumCameraDistance: 0.45,
   maximumCameraDistance: 12,
 })

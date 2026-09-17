@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SpatialHandPoseEngine } from '../SpatialHandPoseEngine'
 import { projectionContext, spatialFrame, spatialHand } from './fixtures'
+import { extractSpatialHandPose } from '../extractSpatialHandPose'
 
 describe('SpatialHandPoseEngine', () => {
   it('requires a stable open palm at the configured threshold', () => {
@@ -52,5 +53,32 @@ describe('SpatialHandPoseEngine', () => {
     const semantic = engine.processSemanticFrame(spatialFrame(0, [anchor, primary]), projectionContext, 2)
     expect(semantic.anchorPose?.trackId).toBe(10)
     expect(semantic.depthEvidence?.trackId).toBe(2)
+    expect(semantic.interactionPose?.trackId).toBe(2)
+    expect(engine.processSemanticFrame(spatialFrame(16, [anchor]), projectionContext, 2).interactionPose).toBeNull()
+  })
+
+  it('extracts primary pinch orientation without a confidence gate or anchor smoothing', () => {
+    const engine = new SpatialHandPoseEngine()
+    const primary = spatialHand(2, 0.01)
+    primary.stableGesture = { ...primary.stableGesture, gesture: 'pinch' }
+    engine.processSemanticFrame(spatialFrame(0, [primary]), projectionContext, 2)
+    const turned = spatialHand(2, 0.01, 'Right', { rotationRad: 0.5 })
+    turned.stableGesture = { ...turned.stableGesture, gesture: 'pinch' }
+    const semantic = engine.processSemanticFrame(spatialFrame(16, [turned, spatialHand(10)]), projectionContext, 2)
+    expect(semantic.anchorPose?.trackId).toBe(10)
+    expect(semantic.interactionPose?.quaternion).toEqual(extractSpatialHandPose(turned, 16, projectionContext, null, true)?.quaternion)
+    expect(engine.processSemanticFrame(spatialFrame(32, [turned]), projectionContext, null).interactionPose).toBeNull()
+    engine.reset()
+    expect(engine.processSemanticFrame(spatialFrame(48, []), projectionContext, 2).interactionPose).toBeNull()
+  })
+
+  it('reports degenerate interaction geometry absent on every frame instead of refreshing fallback', () => {
+    const engine = new SpatialHandPoseEngine()
+    expect(engine.processSemanticFrame(spatialFrame(0, [spatialHand()]), projectionContext, 1).interactionPose).not.toBeNull()
+    const degenerate = spatialHand()
+    degenerate.landmarks = degenerate.landmarks.map((point) => ({ ...point, y: 0.5 }))
+    for (let time = 16; time < 200; time += 16) {
+      expect(engine.processSemanticFrame(spatialFrame(time, [degenerate]), projectionContext, 1).interactionPose).toBeNull()
+    }
   })
 })

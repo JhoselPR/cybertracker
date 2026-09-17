@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { FingerName } from '../types/gestures'
+import type { SpatialQuaternion } from '../types/spatial'
 import type { TrackingDebugSnapshot } from '../types/tracking'
 import type { UiSemanticSnapshot } from '../lib/interaction-bridge'
 
@@ -10,6 +11,9 @@ const FINGER_LABELS: Array<[FingerName, string]> = [
   ['ring', 'R'],
   ['pinky', 'P'],
 ]
+
+const quaternionText = (q: SpatialQuaternion | null | undefined) => q
+  ? `${q.x.toFixed(3)} ${q.y.toFixed(3)} ${q.z.toFixed(3)} ${q.w.toFixed(3)}` : '—'
 
 interface DebugPanelProps {
   snapshot: TrackingDebugSnapshot
@@ -27,6 +31,8 @@ export function DebugPanel({ snapshot, semantics, getDepthTraceJSON }: DebugPane
   const spatialDebug = spatial?.debug
   const spatialPosition = spatial?.transform?.position
   const depth = spatialDebug?.depth
+  const rotation = spatialDebug?.rotation
+  const degrees = (angle: number | null | undefined) => angle == null ? '—' : `${(angle * 180 / Math.PI).toFixed(2)}°`
 
   const copyDepthTrace = async () => {
     try {
@@ -119,6 +125,26 @@ export function DebugPanel({ snapshot, semantics, getDepthTraceJSON }: DebugPane
           ) : null}
         </div>
         <p className="debug-hint">Press R to reset the hologram to palm-anchored mode.</p>
+        <div className="debug-depth">
+          <div className="debug-section-heading">ROTATION</div>
+          <div className="debug-interaction-grid">
+            <span>STATE</span><span>{rotation?.state.toUpperCase() ?? 'HELD'}</span>
+            <span>HOLD REASON</span><span>{rotation?.holdReason ?? 'NONE'}</span>
+            <span>FRAME EVENTS</span><span>{rotation?.inputEvents.join(', ') || 'NONE'}</span>
+            <span>INPUT HAND XYZW</span><span>{quaternionText(rotation?.handRotation)}</span>
+            <span>BASELINE HAND XYZW</span><span>{quaternionText(rotation?.baselineHandRotation)}</span>
+            <span>DELTA XYZW</span><span>{quaternionText(rotation?.deltaRotation)}</span>
+            <span>TARGET XYZW</span><span>{quaternionText(rotation?.targetObjectRotation)}</span>
+            <span>APPLIED XYZW</span><span>{quaternionText(rotation?.appliedObjectRotation)}</span>
+            <span>HAND DELTA</span><span>{degrees(rotation?.deltaAngleFromBaseline)}</span>
+            <span>TARGET DELTA</span><span>{degrees(rotation?.targetDeltaAngle)}</span>
+            <span>APPLIED DELTA</span><span>{degrees(rotation?.appliedDeltaAngle)}</span>
+            <span>REMAINING</span><span>{degrees(rotation?.remainingAngleToTarget)}</span>
+            <span>VELOCITY RAD/S</span><span>{rotation?.angularVelocity.toFixed(3) ?? '—'}</span>
+            <span>MAX STEP</span><span>{degrees(rotation?.maxAngularStep)}</span>
+            <span>DT RAW / EFFECTIVE</span><span>{rotation ? `${rotation.rawDeltaMs.toFixed(1)} / ${rotation.effectiveDeltaMs.toFixed(1)} ms` : '—'}</span>
+          </div>
+        </div>
         <div className="debug-history" aria-label="Recent interaction transitions">
           {semantics.history.map((entry) => (
             <span key={`${entry.timestampMs}:${entry.transition}:${entry.targetId ?? ''}`}>

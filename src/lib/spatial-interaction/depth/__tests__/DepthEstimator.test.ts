@@ -38,6 +38,18 @@ function begin(estimator: DepthEstimator, scale = 1): number {
 }
 
 describe('DepthEstimator apparent-scale control', () => {
+  it.each([0.4, 3])('retains unclamped relative depth beyond the old bounds at %g', (ratio) => {
+    const estimator = new DepthEstimator()
+    const time = begin(estimator)
+    estimator.observe(evidence(time + 10000, ratio))
+    const result = estimator.current()
+    expect(result.trackingValid).toBe(true)
+    expect(result.relativeDepth).toBe(result.filteredScaleRatio)
+    expect(result.relativeDepth).toBeCloseTo(ratio, 12)
+    if (ratio < 1) expect(result.relativeDepth).toBeLessThan(0.68)
+    else expect(result.relativeDepth).toBeGreaterThan(1.42)
+  })
+
   it('reuses recent valid history for an immediate second grab without an admission delay', () => {
     const estimator = new DepthEstimator()
     const time = begin(estimator)
@@ -211,10 +223,12 @@ describe('DepthTraceBuffer', () => {
   it('records matching final world Z and clears it when a ring entry is reused', () => {
     const trace = new DepthTraceBuffer(true, 2)
     trace.push({ ...estimate, timestampMs: 1 })
-    trace.recordWorldZ(1, 0.75)
+    trace.recordWorldZ(1, 0.75, 2.4)
+    expect(trace.export().at(-1)?.velocity).toBe(2.4)
     trace.push({ ...estimate, timestampMs: 2 })
     trace.push({ ...estimate, timestampMs: 3 })
     expect(trace.export().at(-1)?.worldZ).toBeNull()
+    expect(trace.export().at(-1)?.velocity).toBe(0)
   })
 
   it('does not record when debug is disabled', () => {

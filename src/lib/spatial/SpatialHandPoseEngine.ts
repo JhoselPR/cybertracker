@@ -11,6 +11,7 @@ export interface SpatialHandPoseEngineOptions {
 
 export interface SpatialSemanticFrame {
   anchorPose: SpatialHandPose | null
+  interactionPose: SpatialHandPose | null
   depthEvidence: DepthEvidence | null
 }
 
@@ -18,6 +19,7 @@ export class SpatialHandPoseEngine {
   private readonly filter = new SpatialPoseFilter()
   private readonly confidenceThreshold: number
   private current: SpatialHandPose | null = null
+  private interactionPose: SpatialHandPose | null = null
 
   constructor(options: Partial<SpatialHandPoseEngineOptions> = {}) {
     this.confidenceThreshold = options.confidenceThreshold ?? SPATIAL_POSE_POLICY.openPalmConfidence
@@ -56,14 +58,19 @@ export class SpatialHandPoseEngine {
     const interactionHand = preferredTrackId === null
       ? null
       : frame.hands.find((hand) => hand.trackId === preferredTrackId) ?? null
+    this.interactionPose = interactionHand
+      ? extractSpatialHandPose(interactionHand, frame.timestampMs, context, this.interactionPose, true)
+      : null
     return {
       anchorPose,
+      interactionPose: this.interactionPose,
       depthEvidence: interactionHand ? extractDepthEvidence(interactionHand, frame.timestampMs, context) : null,
     }
   }
 
   reset(): void {
     this.current = null
+    this.interactionPose = null
     this.filter.reset()
   }
 

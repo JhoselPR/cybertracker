@@ -64,6 +64,30 @@ describe('extractSpatialHandPose', () => {
     expect(brief?.quaternion).toEqual(valid.quaternion)
     expect(expired).toBeNull()
   })
+
+  it('accepts opposite normals and edge-on 3D bases only on the interaction extraction path', () => {
+    const valid = extractSpatialHandPose(spatialHand(), 0, projectionContext)!
+    const opposite = spatialHand()
+    opposite.landmarks = opposite.landmarks.map((point) => ({ ...point, x: 1 - point.x }))
+    const interaction = extractSpatialHandPose(opposite, 16, projectionContext, valid, true)!
+    expect(interaction).not.toBeNull()
+    expect(dot3(interaction.normal, valid.normal)).toBeCloseTo(-1)
+    expect(extractSpatialHandPose(opposite, 16, projectionContext, valid)?.quaternion).toEqual(valid.quaternion)
+    const edgeOn = spatialHand()
+    edgeOn.landmarks = edgeOn.landmarks.map((point) => ({ ...point, x: 0.5, z: point.x - 0.5 }))
+    expect(extractSpatialHandPose(edgeOn, 32, projectionContext, interaction, true)).not.toBeNull()
+    expect(extractSpatialHandPose(edgeOn, 32, projectionContext, valid)).toBeNull()
+  })
+
+  it('rejects nonfinite interaction Z without changing projected depth distances', () => {
+    const hand = spatialHand()
+    const depth = extractDepthEvidence(hand, 16, projectionContext)!
+    hand.landmarks[5].z = NaN
+    expect(extractSpatialHandPose(hand, 16, projectionContext, null, true)).toBeNull()
+    const after = extractDepthEvidence(hand, 16, projectionContext)!
+    expect(after.distances).toEqual(depth.distances)
+    expect(after.validMask).toEqual(depth.validMask)
+  })
 })
 
 describe('extractDepthEvidence', () => {

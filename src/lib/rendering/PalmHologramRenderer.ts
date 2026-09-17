@@ -41,7 +41,6 @@ export class PalmHologramRenderer {
     this.scene.add(this.root)
     this.root.add(this.core, this.rings, this.orbitals, this.debug)
     this.buildHologram()
-    this.buildDebugGeometry()
     this.debug.visible = false
 
     this.frameLoop = new HologramFrameLoop(this.renderFrame, this.resize, onStatus)
@@ -59,8 +58,10 @@ export class PalmHologramRenderer {
   }
 
   setDebug(enabled: boolean): void {
-    this.debugEnabled = enabled
-    this.debug.visible = enabled && this.root.visible
+    if (this.disposed) return
+    this.debugEnabled = import.meta.env.DEV && enabled
+    if (this.debugEnabled && this.debug.children.length === 0) this.buildDebugGeometry()
+    this.debug.visible = this.debugEnabled && this.root.visible
   }
 
   dispose(): void {

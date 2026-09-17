@@ -43,6 +43,32 @@ function normalizeQuaternion(value: SpatialQuaternion): SpatialQuaternion {
   return { x: value.x / length, y: value.y / length, z: value.z / length, w: value.w / length }
 }
 
+/** Unlike the anchor fallback, invalid interaction samples must remain absent. */
+export function validQuaternion(value: SpatialQuaternion | null | undefined): SpatialQuaternion | null {
+  if (!value) return null
+  const scale = Math.max(Math.abs(value.x), Math.abs(value.y), Math.abs(value.z), Math.abs(value.w))
+  if (!Number.isFinite(scale) || scale === 0) return null
+  const q = { x: value.x / scale, y: value.y / scale, z: value.z / scale, w: value.w / scale }
+  const length = Math.hypot(q.x, q.y, q.z, q.w)
+  return { x: q.x / length, y: q.y / length, z: q.z / length, w: q.w / length }
+}
+
+/** Hamilton product of valid unit orientations; order is significant. */
+export function multiplyQuaternion(a: SpatialQuaternion, b: SpatialQuaternion): SpatialQuaternion {
+  return normalizeQuaternion({
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+  })
+}
+
+export const inverseQuaternion = (q: SpatialQuaternion): SpatialQuaternion => ({ x: -q.x, y: -q.y, z: -q.z, w: q.w })
+
+export const quaternionAngularDistance = (a: SpatialQuaternion, b: SpatialQuaternion): number => (
+  2 * Math.acos(Math.min(1, Math.abs(quaternionDot(a, b))))
+)
+
 /** Converts a right-handed orthonormal basis (matrix columns) to a plain quaternion. */
 export function quaternionFromBasis(basis: SpatialBasis): SpatialQuaternion {
   const m00 = basis.x.x

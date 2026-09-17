@@ -145,6 +145,7 @@ export function extractSpatialHandPose(
   timestampMs: number,
   context: SpatialProjectionContext,
   previous: SpatialHandPose | null = null,
+  interaction = false,
 ): SpatialHandPose | null {
   if (!Number.isFinite(timestampMs) || !Number.isFinite(hand.trackId) || hand.trackId < 0) return null
   const points = PALM
@@ -162,7 +163,8 @@ export function extractSpatialHandPose(
     const anchor2 = viewportNormalizedToNdc(center)
     const width = distanceOnViewport(projected(index, context), projected(pinky, context), context)
     const length = distanceOnViewport(projected(wrist, context), projected(middle, context), context)
-    if (!Number.isFinite(width) || !Number.isFinite(length) || width < 1e-5 || length < 1e-5) return null
+    if (!Number.isFinite(width) || !Number.isFinite(length)
+      || (!interaction && (width < 1e-5 || length < 1e-5))) return null
     const scale = Math.max(
       SPATIAL_POSE_POLICY.minimumScale,
       Math.min(SPATIAL_POSE_POLICY.maximumScale, Math.sqrt(width * length)),
@@ -183,16 +185,16 @@ export function extractSpatialHandPose(
     const displayPinky = displayPoint(pinky, sourceCenter.z, context)
     const x = normalize3(subtract3(displayPinky, displayIndex))
     const wristToFingers = subtract3(displayMiddle, displayWrist)
-    if (!x) return fallbackOrientation(partial, previous)
+    if (!x) return interaction ? null : fallbackOrientation(partial, previous)
     const y = normalize3(subtract3(wristToFingers, scale3(x, dot3(wristToFingers, x))))
-    if (!y) return fallbackOrientation(partial, previous)
+    if (!y) return interaction ? null : fallbackOrientation(partial, previous)
     const z = normalize3(cross3(x, y))
-    if (!z) return fallbackOrientation(partial, previous)
+    if (!z) return interaction ? null : fallbackOrientation(partial, previous)
     const basis: SpatialBasis = { x, y, z }
     let quaternion = quaternionFromBasis(basis)
 
     if (previous?.trackId === hand.trackId) {
-      if (dot3(z, previous.normal) < 0) return fallbackOrientation(partial, previous)
+      if (!interaction && dot3(z, previous.normal) < 0) return fallbackOrientation(partial, previous)
       if (quaternionDot(quaternion, previous.quaternion) < 0) quaternion = negateQuaternion(quaternion)
     }
     return { ...partial, basis, normal: z, quaternion }

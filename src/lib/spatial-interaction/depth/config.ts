@@ -5,6 +5,8 @@ export const DEPTH_CONFIG = Object.freeze({
   minimumSegmentDistance: 1e-5,
   deadZoneLog: 0.006,
   smoothingTimeConstantSeconds: 0.105,
+  /** World units per natural-log scale-ratio unit. */
+  depthSensitivity: 2,
   maximumWorldZVelocity: 2.4,
   traceSlots: 180,
 })

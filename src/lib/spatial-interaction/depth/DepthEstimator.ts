@@ -1,4 +1,3 @@
-import { SPATIAL_INTERACTION_POLICY } from '../camera'
 import { AdaptiveDepthFilter } from './AdaptiveDepthFilter'
 import { DEPTH_CONFIG, type DepthConfig } from './config'
 import { apparentPalmScale, median } from './depthSignals'
@@ -150,10 +149,7 @@ export class DepthEstimator {
     const targetLog = Math.abs(logScaleRatio) <= this.config.deadZoneLog ? 0 : logScaleRatio
     const filteredLog = this.filter.update(targetLog, dtSeconds, this.config.smoothingTimeConstantSeconds)
     const filteredScaleRatio = Math.exp(filteredLog)
-    const relativeDepth = Math.max(
-      SPATIAL_INTERACTION_POLICY.minimumDepthRatio,
-      Math.min(SPATIAL_INTERACTION_POLICY.maximumDepthRatio, filteredScaleRatio),
-    )
+    const relativeDepth = filteredScaleRatio
     const appliedLog = Math.log(relativeDepth)
     const velocity = dtSeconds > 0 ? (appliedLog - this.lastAppliedLog) / dtSeconds : 0
     this.estimate = {
@@ -171,8 +167,8 @@ export class DepthEstimator {
     this.trace.push(this.estimate)
   }
 
-  recordWorldZ(timestampMs: number, worldZ: number): void {
-    this.trace.recordWorldZ(timestampMs, worldZ)
+  recordWorldZ(timestampMs: number, worldZ: number, velocity: number): void {
+    this.trace.recordWorldZ(timestampMs, worldZ, velocity)
   }
 
   private hold(timestampMs = this.lastTimestamp ?? 0): void {

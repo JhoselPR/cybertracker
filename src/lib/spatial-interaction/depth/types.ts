@@ -24,8 +24,9 @@ export interface DepthEstimate {
   scaleRatio: number
   /** Ratio after the sole 105 ms exponential smoother. */
   filteredScaleRatio: number
-  /** Safe-clamped filtered scale ratio used by world-space mapping. */
+  /** Unclamped filtered scale ratio used by world-space mapping (dimensionless). */
   relativeDepth: number
+  /** Estimator derivative in natural-log ratio units/second; not world velocity. */
   velocity: number
   trackingValid: boolean
 }
@@ -37,7 +38,9 @@ export interface DepthTraceEntry {
   scaleRatio: number
   filteredScaleRatio: number
   relativeDepth: number
+  /** Applied position in world units; null until recorded by the engine. */
   worldZ: number | null
+  /** Applied world Z delta/frame duration, in world units/second; zero on hold. */
   velocity: number
   trackingValid: boolean
 }

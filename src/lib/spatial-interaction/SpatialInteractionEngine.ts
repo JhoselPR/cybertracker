@@ -12,12 +12,13 @@ import { HOLOGRAM_CAMERA, PALM_HOLOGRAM_TARGET_ID, SPATIAL_INTERACTION_POLICY } 
 import { normalizedPointerToNdc, perspectiveCameraRay, unprojectNdcAtDepth, worldPointToNdc } from './rayMath'
 import { SpatialTargetRegistry } from './SpatialTargetRegistry'
 import { DEPTH_CONFIG, DepthEstimator, type DepthEstimate } from './depth'
+import { emptyRotationDebug, GrabRotation } from './rotation'
 
 interface GrabCapture {
   trackId: number
   initialDistance: number
   offsetNdc: SpatialVector2
-  quaternion: SpatialTransform['quaternion']
+  rotation: GrabRotation
   scale: number
   startedAtMs: number
 }
@@ -47,7 +48,7 @@ export function createInitialHologramState(timestampMs = 0): HologramSemanticSta
     opacity: 1,
     cursorState: 'normal',
     events: [],
-    debug: { targetId: null, ray: null, grabOffset: null, depthRatio: 1, grabDurationMs: 0, lastEvent: null, depth },
+    debug: { targetId: null, ray: null, grabOffset: null, depthRatio: 1, grabDurationMs: 0, lastEvent: null, depth, rotation: emptyRotationDebug() },
   }
 }
 
@@ -77,6 +78,7 @@ export class SpatialInteractionEngine {
     let transform = this.state.transform ? copyTransform(this.state.transform) : null
     let mode = this.state.mode
     let ray: SpatialRay | null = null
+    let rotationDebug = { ...emptyRotationDebug(), objectQuaternion: transform?.quaternion ?? null }
 
     if (mode === 'palm-anchored' && anchorPose) transform = this.anchoredTransform(anchorPose, viewport)
     if (transform) this.syncTarget(transform)
@@ -97,7 +99,7 @@ export class SpatialInteractionEngine {
         trackId: interactionFrame.primaryTrackId,
         initialDistance: HOLOGRAM_CAMERA.position.z - transform.position.z,
         offsetNdc: { x: objectNdc.x - pointerNdc.x, y: objectNdc.y - pointerNdc.y },
-        quaternion: { ...transform.quaternion },
+        rotation: new GrabRotation(),
         scale: transform.scale,
         startedAtMs: interactionFrame.timestampMs,
       }
@@ -107,16 +109,33 @@ export class SpatialInteractionEngine {
     }
 
     if (mode === 'grabbed' && this.capture && transform) {
+      const previousWorldZ = transform.position.z
+      const dt = Math.max(0, (interactionFrame.timestampMs - this.state.timestampMs) / 1000)
       if (!pinchStart) this.depthEstimator.observe(pointer?.stale ? null : depthEvidence, interactionFrame.timestampMs)
       const move = interactionFrame.events.find((event) => event.type === 'pinchmove' || event.type === 'dragmove')
+      const hand = inputs.interactionPose
+      const invalidOrientation = Boolean(hand && (hand.trackId !== this.capture.trackId
+        || hand.timestampMs !== interactionFrame.timestampMs))
+        || interactionFrame.primaryTrackId !== this.capture.trackId || Boolean(pointer?.stale) || pointer?.tracked === false
+      const holdReason = hand && hand.trackId !== this.capture.trackId ? 'wrong-pose-track'
+        : hand && hand.timestampMs !== interactionFrame.timestampMs ? 'stale-pose-timestamp'
+          : interactionFrame.primaryTrackId !== this.capture.trackId ? 'wrong-primary-track'
+            : pointer?.stale ? 'stale-pointer'
+              : pointer?.tracked === false ? 'untracked-pointer'
+                : !hand ? 'missing-orientation' : null
+      const rotation = this.capture.rotation.update(transform.quaternion,
+        hand?.quaternion ?? null,
+        interactionFrame.timestampMs - this.state.timestampMs, invalidOrientation, holdReason)
+      transform.quaternion = rotation.quaternion
+      rotationDebug = rotation.debug
       if (move && depthEvidence?.trackId === this.capture.trackId && !pointer?.stale) {
         const estimate = this.depthEstimator.current()
-        const depthRatio = Math.max(SPATIAL_INTERACTION_POLICY.minimumDepthRatio,
-          Math.min(SPATIAL_INTERACTION_POLICY.maximumDepthRatio, estimate.relativeDepth))
+        const depthRatio = estimate.filteredScaleRatio
+        const depthDelta = Math.log(depthRatio)
         const requestedDistance = Math.max(SPATIAL_INTERACTION_POLICY.minimumCameraDistance,
-          Math.min(SPATIAL_INTERACTION_POLICY.maximumCameraDistance, this.capture.initialDistance / depthRatio))
+          Math.min(SPATIAL_INTERACTION_POLICY.maximumCameraDistance,
+            this.capture.initialDistance - depthDelta * DEPTH_CONFIG.depthSensitivity))
         const currentDistance = HOLOGRAM_CAMERA.position.z - transform.position.z
-        const dt = Math.max(0, (interactionFrame.timestampMs - this.state.timestampMs) / 1000)
         const maximumDistanceStep = DEPTH_CONFIG.maximumWorldZVelocity * dt
         const distance = !estimate.trackingValid ? currentDistance : currentDistance
           + Math.max(-maximumDistanceStep, Math.min(maximumDistanceStep, requestedDistance - currentDistance))
@@ -124,14 +143,15 @@ export class SpatialInteractionEngine {
         const centerNdc = { x: pointerNdc.x + this.capture.offsetNdc.x, y: pointerNdc.y + this.capture.offsetNdc.y }
         transform = {
           position: unprojectNdcAtDepth(centerNdc, distance, viewport, HOLOGRAM_CAMERA.position, HOLOGRAM_CAMERA.verticalFovDegrees),
-          quaternion: { ...this.capture.quaternion },
+          quaternion: { ...transform.quaternion },
           scale: this.capture.scale,
         }
         this.syncTarget(transform)
         events.push({ ...this.event('grabmove', transform, interactionFrame, ray), type: 'grabmove', depthRatio })
       }
 
-      this.depthEstimator.recordWorldZ(interactionFrame.timestampMs, transform.position.z)
+      this.depthEstimator.recordWorldZ(interactionFrame.timestampMs, transform.position.z,
+        dt > 0 ? (transform.position.z - previousWorldZ) / dt : 0)
 
       const terminal = interactionFrame.events.find((event) => (
         event.type === 'pinchend' || event.type === 'dragend'
@@ -143,6 +163,7 @@ export class SpatialInteractionEngine {
           : { ...this.event('grabcancel', transform, interactionFrame, ray), type: 'grabcancel', reason })
         mode = 'free'
         this.capture = null
+        rotationDebug = { ...emptyRotationDebug(), objectQuaternion: transform.quaternion }
         this.depthEstimator.endGrab()
         this.updateHover(reason === 'released' ? ray : null, transform, interactionFrame, events)
       }
@@ -175,6 +196,9 @@ export class SpatialInteractionEngine {
         grabDurationMs: this.capture ? interactionFrame.timestampMs - this.capture.startedAtMs : 0,
         lastEvent,
         depth: depthEstimate,
+        rotation: { ...rotationDebug, objectQuaternion: transform?.quaternion ?? null,
+          appliedObjectRotation: transform?.quaternion ?? null,
+          inputEvents: interactionFrame.events.map((event) => event.type) },
       },
     }
     return structuredClone(this.state)

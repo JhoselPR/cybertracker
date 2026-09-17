@@ -87,6 +87,102 @@ const process = (
 })
 
 describe('SpatialInteractionEngine', () => {
+  function depthGrab() {
+    const estimator = new DepthEstimator({ debugEnabled: true })
+    const engine = new SpatialInteractionEngine(undefined, estimator)
+    const center = { x: 0.5, y: 0.5 }
+    let timestampMs = 0
+    const run = (type?: 'pinchstart' | 'pinchmove', scale: number | null = 1, dt = 16) => {
+      timestampMs += dt
+      return engine.processFrame({
+        interactionFrame: frame(timestampMs, center, type ? [event(type, center)] : []),
+        anchorPose: pose,
+        depthEvidence: scale === null ? null : { ...metric(scale), timestampMs },
+        viewport,
+        debugEnabled: true,
+      })
+    }
+    for (let i = 0; i < 10; i += 1) run()
+    const grabbed = run('pinchstart')
+    expect(grabbed.grabbed).toBe(true)
+    return { estimator, grabbed, run }
+  }
+
+  it.each([
+    [1, 1.2, 1.4, 1.6, 1.8, 2, 2.4, 2.6, 3],
+    [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4],
+  ])('moves actual world Z strictly monotonically across ratios %j', (...ratios) => {
+    const { grabbed, run } = depthGrab()
+    let previousZ = grabbed.transform!.position.z
+    for (const ratio of ratios) {
+      const state = run('pinchmove', ratio, 2000)
+      const z = state.transform!.position.z
+      if (ratio > 1) expect(z).toBeGreaterThan(previousZ)
+      else if (ratio < 1) expect(z).toBeLessThan(previousZ)
+      else expect(z).toBeCloseTo(previousZ, 12)
+      // The entire nominal 0.4..3 range retains margin from both safety planes.
+      const distance = HOLOGRAM_CAMERA.position.z - z
+      expect(distance).toBeGreaterThan(0.45)
+      expect(distance).toBeLessThan(12)
+      expect(state.transform!.scale).toBe(grabbed.transform!.scale)
+      expect(state.transform!.quaternion).toEqual(grabbed.transform!.quaternion)
+      previousZ = z
+    }
+  })
+
+  it('maps reciprocal ratios to equal and opposite target displacements', () => {
+    const deltas = [2, 0.5].map((ratio) => {
+      const { grabbed, run } = depthGrab()
+      const moved = run('pinchmove', ratio, 10000)
+      const delta = moved.transform!.position.z - grabbed.transform!.position.z
+      expect(delta).toBeCloseTo(2 * Math.log(ratio), 12)
+      return delta
+    })
+    expect(deltas[0]).toBeCloseTo(-deltas[1], 12)
+  })
+
+  it('converges at a fixed 2.5 ratio and traces applied velocity through hold and recovery', () => {
+    const { estimator, grabbed, run } = depthGrab()
+    // Settle the estimator without movement; the world transform must not follow yet.
+    const settled = run(undefined, 2.5, 10000)
+    expect(settled.transform).toEqual(grabbed.transform)
+    const targetZ = grabbed.transform!.position.z + 2 * Math.log(2.5)
+    let previousZ = grabbed.transform!.position.z
+    let movingFrames = 0
+    for (let i = 0; i < 100; i += 1) {
+      const state = run('pinchmove', 2.5)
+      const z = state.transform!.position.z
+      const entry = estimator.exportTrace().at(-1)!
+      expect(estimator.current().velocity).toBe(0)
+      expect(entry.velocity).toBeCloseTo((z - previousZ) / 0.016, 12)
+      expect(Math.abs(entry.velocity)).toBeLessThanOrEqual(2.4 + 1e-9)
+      if (targetZ - previousZ > 1e-9) {
+        expect(z).toBeGreaterThan(previousZ)
+        expect(entry.velocity).toBeGreaterThan(0)
+        movingFrames += 1
+      }
+      previousZ = z
+      if (i === 10) {
+        const lost = run('pinchmove', null)
+        expect(lost.transform).toEqual(state.transform)
+        expect(estimator.exportTrace().at(-1)!.velocity).toBe(0)
+        expect(estimator.current().trackingValid).toBe(false)
+      }
+    }
+    expect(movingFrames).toBeGreaterThan(40)
+    expect(previousZ).toBeCloseTo(targetZ, 12)
+    expect(estimator.current().trackingValid).toBe(true)
+  })
+
+  it.each([[1e100, 0.45], [1e-4, 12]])('clamps only final distance for finite ratio %g', (ratio, distance) => {
+    const { estimator, run } = depthGrab()
+    const state = run('pinchmove', ratio, 10000)
+    expect(estimator.current().trackingValid).toBe(true)
+    expect(estimator.current().filteredScaleRatio).toBeGreaterThan(0)
+    expect(Number.isFinite(estimator.current().filteredScaleRatio)).toBe(true)
+    expect(state.transform!.position.z).toBeCloseTo(HOLOGRAM_CAMERA.position.z - distance, 12)
+  })
+
   it('keeps palm-anchored ownership and the last transform through anchor loss', () => {
     const engine = new SpatialInteractionEngine()
     const initial = process(engine, frame(0, null), null)
@@ -165,7 +261,7 @@ describe('SpatialInteractionEngine', () => {
     expect(moved.debug.grabOffset?.x).toBeCloseTo(-0.16, 5)
   })
 
-  it('maps clamped palm-scale ratio to depth without changing scale or rotation', () => {
+  it('maps log palm-scale ratio to depth without changing scale or rotation', () => {
     const engine = new SpatialInteractionEngine()
     for (let i = 0; i < 10; i += 1) process(engine, frame(i * 16, { x: 0.5, y: 0.5 }))
     const grabbed = process(engine, frame(160, { x: 0.5, y: 0.5 }, [event('pinchstart', { x: 0.5, y: 0.5 })]))
@@ -250,7 +346,7 @@ describe('SpatialInteractionEngine', () => {
     expect(reset.transform).toBeNull()
   })
 
-  it('maps inverse distance exactly and correlates loss and recovery traces with each frame', () => {
+  it('maps log distance exactly and correlates loss and recovery traces with each frame', () => {
     const estimator = new DepthEstimator({ debugEnabled: true })
     const engine = new SpatialInteractionEngine(undefined, estimator)
     const center = { x: 0.5, y: 0.5 }
@@ -276,8 +372,8 @@ describe('SpatialInteractionEngine', () => {
     for (let i = 0; i < 10; i += 1) run(i * 16)
     const grabbed = run(160, [event('pinchstart', center)])
     const moved = run(1160, [event('pinchmove', center)], metric(1.1))
-    expect(moved.transform!.position.z).toBeCloseTo(HOLOGRAM_CAMERA.position.z
-      - (HOLOGRAM_CAMERA.position.z - grabbed.transform!.position.z) / estimator.current().relativeDepth, 12)
+    expect(moved.transform!.position.z).toBeCloseTo(grabbed.transform!.position.z
+      + Math.log(estimator.current().filteredScaleRatio) * DEPTH_CONFIG.depthSensitivity, 12)
     const lost = run(1176, [], null)
     expect(lost.transform).toEqual(moved.transform)
     expect(estimator.current().trackingValid).toBe(false)

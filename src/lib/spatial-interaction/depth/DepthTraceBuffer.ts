@@ -26,17 +26,20 @@ export class DepthTraceBuffer {
     entry.filteredScaleRatio = estimate.filteredScaleRatio
     entry.relativeDepth = estimate.relativeDepth
     entry.worldZ = null
-    entry.velocity = estimate.velocity
+    entry.velocity = 0
     entry.trackingValid = estimate.trackingValid
     this.writeIndex = (this.writeIndex + 1) % this.entries.length
     this.count = Math.min(this.entries.length, this.count + 1)
   }
 
-  recordWorldZ(timestampMs: number, worldZ: number): void {
+  recordWorldZ(timestampMs: number, worldZ: number, velocity = 0): void {
     if (!this.active || this.count === 0 || !Number.isFinite(worldZ)) return
     const latestIndex = (this.writeIndex - 1 + this.entries.length) % this.entries.length
     const entry = this.entries[latestIndex]
-    if (entry.timestampMs === timestampMs) entry.worldZ = worldZ
+    if (entry.timestampMs === timestampMs) {
+      entry.worldZ = worldZ
+      entry.velocity = Number.isFinite(velocity) ? velocity : 0
+    }
   }
 
   clear(): void {

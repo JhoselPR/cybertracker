@@ -20,6 +20,7 @@ export interface SpatialTransform {
 export interface SpatialInteractionInputs {
   interactionFrame: InteractionFrame
   anchorPose: SpatialHandPose | null
+  interactionPose?: SpatialHandPose | null
   depthEvidence: DepthEvidence | null
   viewport: { width: number; height: number }
   debugEnabled: boolean
@@ -47,6 +48,30 @@ export interface SpatialInteractionDebug {
   grabDurationMs: number
   lastEvent: SpatialInteractionEvent['type'] | null
   depth: DepthEstimate
+  rotation: RotationDebug
+}
+
+export interface RotationDebug {
+  handRotation: SpatialQuaternion | null
+  baselineHandRotation: SpatialQuaternion | null
+  deltaRotation: SpatialQuaternion | null
+  targetObjectRotation: SpatialQuaternion | null
+  appliedObjectRotation: SpatialQuaternion | null
+  deltaAngleFromBaseline: number | null
+  targetDeltaAngle: number | null
+  appliedDeltaAngle: number | null
+  remainingAngleToTarget: number | null
+  maxAngularStep: number
+  rawDeltaMs: number
+  effectiveDeltaMs: number
+  holdReason: string | null
+  inputEvents: readonly string[]
+  handQuaternion: SpatialQuaternion | null
+  initialHandQuaternion: SpatialQuaternion | null
+  objectQuaternion: SpatialQuaternion | null
+  deltaAngle: number
+  angularVelocity: number
+  state: 'valid' | 'held' | 'invalid'
 }
 
 export interface HologramSemanticState {
